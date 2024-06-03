@@ -106,6 +106,7 @@ func main() {
 		panic(err)
 	}
 	defer term.Restore(int(os.Stdin.Fd()), oldState)
+
 	ansi.ClearEntireScreen()
 	ansi.SetTerminalWindowTitle(editor.Filename)
 
@@ -115,8 +116,7 @@ func main() {
 	ansi.ShowCursor()
 	ansi.EnableAlternateScreenBuffer()
 
-	ansi.MoveCursor(0, 0)
-	editor.PrintBuffer()
+	editor.Render()
 
 	// render loop
 	go func() {
@@ -131,6 +131,7 @@ func main() {
 		}
 	}
 
+	ansi.ClearEntireScreen()
 	ansi.DisableMouseReporting()
 	ansi.DisableAlternateScreenBuffer()
 }

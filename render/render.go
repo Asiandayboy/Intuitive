@@ -29,7 +29,7 @@ type Box struct {
 	X, Y          int
 	BorderColor   ansi.RGBColor // defaults to white if excluded (255, 255, 255)
 	FillColor     ansi.RGBColor // exclude this field if you don't want a fill color
-	BorderStyle   string        // "double" or "single"
+	BorderStyle   string        // "double" or "single"; defaults to single
 }
 
 /*
@@ -49,6 +49,10 @@ func DrawBox(b Box, resetCursor bool) {
 		ansi.MoveCursor(0, 0)
 	}
 
+	if b.BorderStyle == "" {
+		b.BorderStyle = "single"
+	}
+
 	var lines []string
 	if b.BorderStyle == "single" {
 		lines = []string{
@@ -64,8 +68,12 @@ func DrawBox(b Box, resetCursor bool) {
 		}
 	}
 
-	ansi.MoveCursorRight(b.X)
-	ansi.MoveCursorDown(b.Y)
+	if b.X > 0 {
+		ansi.MoveCursorRight(b.X)
+	}
+	if b.Y > 0 {
+		ansi.MoveCursorDown(b.Y)
+	}
 
 	var color string = ansi.NewRGBColor(255, 255, 255).ToFgColorANSI()
 
@@ -85,18 +93,22 @@ func DrawBox(b Box, resetCursor bool) {
 	fmt.Println(color + lines[1] + Reset)
 
 	for range b.Height - 2 { // - 2 for the top border and bottom border
-		ansi.MoveCursorRight(b.X)
+		if b.X > 0 {
+			ansi.MoveCursorRight(b.X)
+		}
 		fmt.Print(color + lines[5] + Reset)
 		fmt.Printf("%s%*s%s\n", color, b.Width-1, lines[5], Reset)
 	}
 
-	ansi.MoveCursorRight(b.X)
+	if b.X > 0 {
+		ansi.MoveCursorRight(b.X)
+	}
 
 	fmt.Print(color + lines[2] + Reset)
 	for range b.Width - 2 { // -2 for the left and right borders
 		fmt.Print(color + lines[4] + Reset)
 	}
-	fmt.Println(color + lines[3] + Reset)
+	fmt.Print(color + lines[3] + Reset)
 }
 
 type Line struct {

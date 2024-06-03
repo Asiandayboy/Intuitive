@@ -236,8 +236,13 @@ func (f FileEditor) PrintStatusBar() {
 
 	borderColor := ansi.NewRGBColor(60, 60, 60)
 
-	// draw the editor mode next to status bar
+	modeColors := map[byte]ansi.RGBColor{
+		EditorCommandMode: ansi.NewRGBColor(75, 176, 255), // blue
+		EditorEditMode:    ansi.NewRGBColor(216, 148, 53), // orange
+		EditorViewMode:    ansi.NewRGBColor(158, 75, 253), // purple
+	}
 
+	// draw the editor mode next to status bar
 	render.DrawBox(render.Box{
 		Width: 5, Height: height,
 		X: 0, Y: yOffset,
@@ -245,7 +250,7 @@ func (f FileEditor) PrintStatusBar() {
 	}, true)
 
 	ansi.MoveCursor(yOffset+2, 2)
-	fmt.Printf(Blue+"[%c]"+Reset, f.EditorMode)
+	fmt.Printf(modeColors[f.EditorMode].ToFgColorANSI()+"[%c]"+Reset, f.EditorMode)
 
 	// draw the main part of the status bar
 	render.DrawBox(render.Box{
@@ -254,6 +259,7 @@ func (f FileEditor) PrintStatusBar() {
 		BorderColor: borderColor,
 	}, true)
 
+	// draw file name
 	ansi.MoveCursor(yOffset+2, EditorLeftMargin)
 	if !f.Saved {
 		fmt.Print(Green + f.Filename + Cyan + Italic + " (Unsaved)" + Reset)
@@ -261,20 +267,11 @@ func (f FileEditor) PrintStatusBar() {
 		fmt.Print(Green + f.Filename + Reset)
 	}
 
-	ansi.MoveCursor(yOffset+2, f.TermWidth-18)
-	fmt.Print("Char count: ", f.GetBufferCharCount())
+	wordCountColor := ansi.NewRGBColor(100, 100, 100).ToFgColorANSI()
 
-	// width, _, _ := term.GetSize(int(os.Stdout.Fd()))
-	// if err != nil {
-	// 	fmt.Println(err)
-	// 	return
-	// }
-	// drawBox(50, 4, [][]string{
-	// 	{fmt.Sprintf(" Word Count: %d   Viewport Size: (%d, %d)", f.GetBufferCharCount(), width, f.MaxTermHeight)},
-	// 	{fmt.Sprintf(" Ln %d, Col %d     Viewport Offset: (%d, %d)", f.CursorY+1+f.ViewportOffsetY, f.CursorX+1, f.ViewportOffsetX, f.ViewportOffsetY)},
-	// 	{fmt.Sprintf(" Buffer length: %d", len(f.Buffer))},
-	// 	{f.Filename},
-	// })
+	// draw word count
+	ansi.MoveCursor(yOffset+2, f.TermWidth-18)
+	fmt.Print(wordCountColor+"Char count: ", f.GetBufferCharCount(), Reset)
 }
 
 func (f FileEditor) Render() {

@@ -1,10 +1,12 @@
 package fileeditor
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/Asiandayboy/CLITextEditor/util/ansi"
+	"github.com/Asiandayboy/CLITextEditor/util/math"
 )
 
 /*
@@ -72,10 +74,22 @@ Here are all the mouse events:
 
 */
 
-const SGR_MOUSE_PREFIX = "[<"
+const SGR_MOUSE_PREFIX string = "[<"
+
+const (
+	MouseEventLeftClick byte = iota
+	MouseEventWheelClick
+	MouseEventRightClick
+	MouseEventLeftDrag
+	MouseEventWheelDrag
+	MouseEventRightDrag
+	MouseEventScrollUp
+	MouseEventScrollDown
+)
 
 type MouseInput struct {
-	Event, X, Y int
+	Event byte
+	X, Y  int
 }
 
 /*
@@ -94,7 +108,7 @@ func ReadEscSequence(buf []byte, numBytesReadFromBuf int) (bool, MouseInput) {
 		x, _ := strconv.Atoi(parts[1])
 		y, _ := strconv.Atoi(parts[2])
 
-		return true, MouseInput{event, x, y}
+		return true, MouseInput{byte(event), x, y}
 	}
 
 	return false, MouseInput{}
@@ -102,11 +116,19 @@ func ReadEscSequence(buf []byte, numBytesReadFromBuf int) (bool, MouseInput) {
 
 func HandleMouseInput(editor *FileEditor, m MouseInput) {
 
-	if m.Event == 0 {
-		ansi.MoveCursor(m.Y, m.X)
+	if m.Event == MouseEventLeftClick {
+		// constrain cursor to not extend past visual buffer
+		visualBufLen := len(editor.VisualBuffer)
+
+		if m.Y > visualBufLen {
+			ansi.MoveCursor(visualBufLen, len(editor.VisualBuffer[visualBufLen-1])+EditorLeftMargin)
+			return
+		}
+
+		currLineLen := len(editor.VisualBuffer[m.Y-1])
+		ansi.MoveCursor(m.Y, math.Clamp(m.X, EditorLeftMargin, currLineLen+EditorLeftMargin))
 	}
 
-	// fmt.Println("Mouse:", m.Event, m.X, m.Y)
 }
 
 func HandleEscapeInput(editor *FileEditor, buf []byte, n int) byte {
@@ -147,7 +169,7 @@ func HandleKeyboardInput(editor *FileEditor, key byte) byte {
 			}
 		}
 	} else {
-		// fmt.Println("Some other key")
+		fmt.Println("Some other key")
 	}
 
 	// editor.Keybindings.MapKeybindToAction(key, false, *editor)

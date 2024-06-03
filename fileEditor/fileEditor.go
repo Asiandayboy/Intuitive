@@ -59,10 +59,10 @@ left margin accounts for the line numbers, and the vertical border
 const EditorLeftMargin int = 8
 
 type FileEditor struct {
-	Filename string
-	Buffer   []string
-	file     *os.File
-
+	Filename        string
+	FileBuffer      []string
+	VisualBuffer    []string
+	file            *os.File
 	CursorX         int
 	CursorY         int
 	ViewportOffsetX int
@@ -73,10 +73,11 @@ type FileEditor struct {
 	StatusBarHeight int
 	Saved           bool
 	EditorMode      byte
+	Keybindings     Keybind
+	inputChan       chan byte
 
-	Keybindings Keybind
-
-	inputChan chan byte
+	maxCursorX int
+	maxCursorY int
 }
 
 func NewFileEditor(filename string) FileEditor {
@@ -87,20 +88,16 @@ func NewFileEditor(filename string) FileEditor {
 
 	return FileEditor{
 		Filename:        filename,
-		Buffer:          make([]string, 0),
-		CursorX:         0,
-		CursorY:         0,
-		ViewportOffsetX: 7,
-		ViewportOffsetY: 0,
+		FileBuffer:      make([]string, 0),
+		VisualBuffer:    make([]string, 0),
 		TermWidth:       width,
 		TermHeight:      height,
 		MaxTermHeight:   height,
 		StatusBarHeight: 3,
 		Saved:           false,
 		EditorMode:      EditorCommandMode,
-
-		Keybindings: NewKeybind(),
-		inputChan:   make(chan byte, 1),
+		Keybindings:     NewKeybind(),
+		inputChan:       make(chan byte, 1),
 	}
 }
 
@@ -124,7 +121,7 @@ func (f *FileEditor) CloseFile() error {
 
 func (f FileEditor) GetBufferCharCount() int {
 	var count int = 0
-	for _, line := range f.Buffer {
+	for _, line := range f.FileBuffer {
 		count += len(line)
 	}
 
@@ -135,12 +132,12 @@ func (f *FileEditor) ReadFileToBuffer() error {
 	scanner := bufio.NewScanner(f.file)
 	var rowCount int = 0
 	for scanner.Scan() {
-		f.Buffer = append(f.Buffer, scanner.Text())
+		f.FileBuffer = append(f.FileBuffer, scanner.Text())
 		rowCount++
 	}
 
 	if rowCount == 0 {
-		f.Buffer = append(f.Buffer, "")
+		f.FileBuffer = append(f.FileBuffer, "")
 	}
 
 	// // set cursor's initial position to end of file
@@ -152,12 +149,7 @@ func (f *FileEditor) ReadFileToBuffer() error {
 	return scanner.Err()
 }
 
-func (f *FileEditor) GetWordWrappedLines(
-	line string,
-	maxWidth int,
-	maxHeight *int,
-) (lines []string) {
-
+func (f *FileEditor) GetWordWrappedLines(line string, maxWidth int) (lines []string) {
 	length := len(line)
 
 	for length >= maxWidth {
@@ -166,7 +158,6 @@ func (f *FileEditor) GetWordWrappedLines(
 		lines = append(lines, line[:cutoffIndex])
 		line = line[cutoffIndex:]
 		length = len(line)
-		*maxHeight--
 	}
 
 	/*
@@ -181,6 +172,7 @@ func (f *FileEditor) GetWordWrappedLines(
 func (f *FileEditor) PrintBuffer() {
 	lineNumColor := ansi.NewRGBColor(80, 80, 80).ToFgColorANSI()
 	borderColor := ansi.NewRGBColor(60, 60, 60).ToFgColorANSI()
+	wrappedColor := ansi.NewRGBColor(60, 60, 60).ToFgColorANSI()
 
 	/*
 		The status bar height is subtracted from the terminal height to avoid the unnecessary scrolling,
@@ -191,40 +183,45 @@ func (f *FileEditor) PrintBuffer() {
 	var maxHeight int = f.TermHeight - f.StatusBarHeight
 
 	var maxWidth int = f.TermWidth - EditorLeftMargin
-	var cursorX, cursorY int
+
+	f.maxCursorX = 0
+	f.maxCursorY = 0
+
+	f.VisualBuffer = []string{}
 
 	ansi.MoveCursor(0, 0)
 
 	for i := 0; i < maxHeight; i++ {
-		if i >= len(f.Buffer) {
+		if i >= len(f.FileBuffer) {
 			fmt.Printf("%s   ~ %s%s%s\n", lineNumColor, borderColor, Vertical, Reset)
 		} else {
-			line := f.Buffer[i]
+			line := f.FileBuffer[i]
 
 			if len(line) >= maxWidth {
-				wordWrappedLines := f.GetWordWrappedLines(line, maxWidth, &maxHeight)
+				wordWrappedLines := f.GetWordWrappedLines(line, maxWidth)
 
 				for j, l := range wordWrappedLines {
 					if j == 0 {
 						fmt.Printf("%s%4d %s%s%s %s\n", lineNumColor, i+1, borderColor, Vertical, Reset, l)
-						cursorX = len(line) + EditorLeftMargin
-						cursorY += 1
 					} else {
-						fmt.Printf("%s     %s%s%s %s\n", lineNumColor, borderColor, Vertical, Reset, l)
-						cursorX = len(line) + EditorLeftMargin
-						cursorY += 1
+						fmt.Printf("%s   %s%s %s%s%s %s\n", lineNumColor, wrappedColor, Vertical, borderColor, Vertical, Reset, l)
 					}
+
+					maxHeight--
+					f.maxCursorX = len(l) + EditorLeftMargin
+					f.maxCursorY += 1
+					f.VisualBuffer = append(f.VisualBuffer, l)
 				}
 			} else {
 				fmt.Printf("%s%4d %s%s%s %s\n", lineNumColor, i+1, borderColor, Vertical, Reset, line)
-				cursorX = len(line) + EditorLeftMargin
-				cursorY += 1
+				f.VisualBuffer = append(f.VisualBuffer, line)
+				f.maxCursorX = len(line) + EditorLeftMargin
+				f.maxCursorY += 1
 			}
 
 		}
 	}
 
-	ansi.MoveCursor(cursorY, cursorX)
 }
 
 func (f FileEditor) PrintStatusBar() {
@@ -274,15 +271,18 @@ func (f FileEditor) PrintStatusBar() {
 	fmt.Print(wordCountColor+"Char count: ", f.GetBufferCharCount(), Reset)
 }
 
-func (f FileEditor) Render() {
+func (f *FileEditor) Render() {
+	ansi.HideCursor()
+
 	f.PrintBuffer()
 	f.PrintStatusBar()
+
+	ansi.ShowCursor()
 }
 
 func (editor *FileEditor) UpdateLoop() {
 updateLoop:
 	for {
-
 		termW, termH, _ := term.GetSize(int(os.Stdout.Fd()))
 
 		if !(termW == editor.TermWidth && termH == editor.TermHeight) { // resize
@@ -302,7 +302,6 @@ updateLoop:
 				ansi.ClearEntireScreen()
 				editor.TermHeight = termH
 				editor.TermWidth = termW
-
 				editor.Render()
 			}
 		default:
@@ -348,56 +347,56 @@ func (editor *FileEditor) OnInput() int {
 	return 0
 }
 
-func drawBox(width uint16, height uint16, words [][]string) {
-	xOffset := "     "
+// func drawBox(width uint16, height uint16, words [][]string) {
+// 	xOffset := "     "
 
-	// draw top border
-	fmt.Print(xOffset)
-	fmt.Print(Grey + TopLCorner + Reset)
-	var i uint16
-	for i = 0; i < width; i++ {
-		fmt.Print(Grey + Horizontal + Reset)
-		if i+1 == width {
-			fmt.Println(Grey + TopRCorner + Reset)
-		}
-	}
+// 	// draw top border
+// 	fmt.Print(xOffset)
+// 	fmt.Print(Grey + TopLCorner + Reset)
+// 	var i uint16
+// 	for i = 0; i < width; i++ {
+// 		fmt.Print(Grey + Horizontal + Reset)
+// 		if i+1 == width {
+// 			fmt.Println(Grey + TopRCorner + Reset)
+// 		}
+// 	}
 
-	// draw side borders and words
-	for i = 0; i < height; i++ {
-		fmt.Print(xOffset)
-		fmt.Print(Grey + Vertical + Reset)
-		var totalFormatedWidth uint16 = width
+// 	// draw side borders and words
+// 	for i = 0; i < height; i++ {
+// 		fmt.Print(xOffset)
+// 		fmt.Print(Grey + Vertical + Reset)
+// 		var totalFormatedWidth uint16 = width
 
-		firstWords := words[i]
-		for _, word := range firstWords {
-			wordLen := uint16(len(word))
-			if wordLen >= 50 {
-				panic(fmt.Sprintf(`"%s" is bigger than the specified box width.`, word))
-			}
+// 		firstWords := words[i]
+// 		for _, word := range firstWords {
+// 			wordLen := uint16(len(word))
+// 			if wordLen >= 50 {
+// 				panic(fmt.Sprintf(`"%s" is bigger than the specified box width.`, word))
+// 			}
 
-			if i == 3 { // row containing filename
-				fmt.Printf(" Filename: %s%s %s%s(Unsaved)%s", Green, word, Italic, Cyan, Reset)
-				wordLen += 21
-			} else {
-				fmt.Print(word)
-			}
-			totalFormatedWidth -= wordLen
-		}
+// 			if i == 3 { // row containing filename
+// 				fmt.Printf(" Filename: %s%s %s%s(Unsaved)%s", Green, word, Italic, Cyan, Reset)
+// 				wordLen += 21
+// 			} else {
+// 				fmt.Print(word)
+// 			}
+// 			totalFormatedWidth -= wordLen
+// 		}
 
-		formatted := fmt.Sprintf("%%%ds", totalFormatedWidth)
-		fmt.Printf("%s%s\n", fmt.Sprintf(formatted, " "), Grey+Vertical+Reset)
-	}
+// 		formatted := fmt.Sprintf("%%%ds", totalFormatedWidth)
+// 		fmt.Printf("%s%s\n", fmt.Sprintf(formatted, " "), Grey+Vertical+Reset)
+// 	}
 
-	// draw bottom border
-	fmt.Print(xOffset)
-	fmt.Print(Grey + BotLCorner + Reset)
-	for i = 0; i < width; i++ {
-		fmt.Print(Grey + Horizontal + Reset)
-		if i+1 == width {
-			fmt.Println(Grey + BotRCorner + Reset)
-		}
-	}
-}
+// 	// draw bottom border
+// 	fmt.Print(xOffset)
+// 	fmt.Print(Grey + BotLCorner + Reset)
+// 	for i = 0; i < width; i++ {
+// 		fmt.Print(Grey + Horizontal + Reset)
+// 		if i+1 == width {
+// 			fmt.Println(Grey + BotRCorner + Reset)
+// 		}
+// 	}
+// }
 
 /*
 	n, _ := os.Stdin.Read(buffer)

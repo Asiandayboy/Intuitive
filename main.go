@@ -113,7 +113,6 @@ func main() {
 	enableVirtualTerminalInput()
 
 	ansi.EnableMouseReporting()
-	ansi.ShowCursor()
 	ansi.EnableAlternateScreenBuffer()
 
 	editor.Render()

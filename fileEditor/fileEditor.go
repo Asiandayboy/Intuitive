@@ -8,6 +8,7 @@ import (
 
 	// "github.com/Asiandayboy/CLITextEditor/render"
 
+	"github.com/Asiandayboy/CLITextEditor/render"
 	"github.com/Asiandayboy/CLITextEditor/util/ansi"
 	"golang.org/x/term"
 )
@@ -33,10 +34,29 @@ const (
 )
 
 const (
-	Quit int = iota
+	Quit byte = iota + 1
 	KeyboardInput
 	Resize
+	EditorModeChange
 )
+
+// the three editor modes a user can be in
+const (
+	EditorCommandMode uint8 = 'C'
+	EditorEditMode    uint8 = 'E'
+	EditorViewMode    uint8 = 'V'
+)
+
+/*
+left margin accounts for the line numbers, and the vertical border
+
+4 for the digits (I doubt a single file will exceed 9999 lines)
+1 for the space between the line numbers and the vertical border
+1 for the vertical border
+1 for the space between the vertical border and the start of the line
+1 for the start of the line
+*/
+const EditorLeftMargin int = 8
 
 type FileEditor struct {
 	Filename string
@@ -50,10 +70,13 @@ type FileEditor struct {
 	TermWidth       int
 	TermHeight      int
 	MaxTermHeight   int
+	StatusBarHeight int
+	Saved           bool
+	EditorMode      byte
 
 	Keybindings Keybind
 
-	inputChan chan int
+	inputChan chan byte
 }
 
 func NewFileEditor(filename string) FileEditor {
@@ -72,9 +95,12 @@ func NewFileEditor(filename string) FileEditor {
 		TermWidth:       width,
 		TermHeight:      height,
 		MaxTermHeight:   height,
+		StatusBarHeight: 3,
+		Saved:           false,
+		EditorMode:      EditorCommandMode,
 
 		Keybindings: NewKeybind(),
-		inputChan:   make(chan int, 1),
+		inputChan:   make(chan byte, 1),
 	}
 }
 
@@ -157,25 +183,14 @@ func (f *FileEditor) PrintBuffer() {
 	borderColor := ansi.NewRGBColor(60, 60, 60).ToFgColorANSI()
 
 	/*
-		2 is subtracted from the terminal height to avoid the unnecessary scrolling,
+		The status bar height is subtracted from the terminal height to avoid the unnecessary scrolling,
 		which would truncate the beginning of the buffer; And it also refers to the height
 		that the status bar will takeup. The maxHeight value will also be decreased the more
 		word-wrapped lines there are.
 	*/
-	var maxHeight int = f.TermHeight - 2
+	var maxHeight int = f.TermHeight - f.StatusBarHeight
 
-	/*
-		left margin accounts for the line numbers, and the vertical border
-
-		4 for the digits (I doubt a single file will exceed 9999 lines)
-		1 for the space between the line numbers and the vertical border
-		1 for the vertical border
-		1 for the space between the vertical border and the start of the line
-		1 for the start of the line
-	*/
-	const leftMargin int = 8
-
-	var maxWidth int = f.TermWidth - leftMargin
+	var maxWidth int = f.TermWidth - EditorLeftMargin
 	var cursorX, cursorY int
 
 	ansi.MoveCursor(0, 0)
@@ -192,17 +207,17 @@ func (f *FileEditor) PrintBuffer() {
 				for j, l := range wordWrappedLines {
 					if j == 0 {
 						fmt.Printf("%s%4d %s%s%s %s\n", lineNumColor, i+1, borderColor, Vertical, Reset, l)
-						cursorX = len(line) + leftMargin
+						cursorX = len(line) + EditorLeftMargin
 						cursorY += 1
 					} else {
 						fmt.Printf("%s     %s%s%s %s\n", lineNumColor, borderColor, Vertical, Reset, l)
-						cursorX = len(line) + leftMargin
+						cursorX = len(line) + EditorLeftMargin
 						cursorY += 1
 					}
 				}
 			} else {
 				fmt.Printf("%s%4d %s%s%s %s\n", lineNumColor, i+1, borderColor, Vertical, Reset, line)
-				cursorX = len(line) + leftMargin
+				cursorX = len(line) + EditorLeftMargin
 				cursorY += 1
 			}
 
@@ -212,22 +227,59 @@ func (f *FileEditor) PrintBuffer() {
 	ansi.MoveCursor(cursorY, cursorX)
 }
 
-func (f FileEditor) DrawStatusBar() {
-	width, _, err := term.GetSize(int(os.Stdout.Fd()))
-	if err != nil {
-		fmt.Println(err)
-		return
+func (f FileEditor) PrintStatusBar() {
+	width := f.TermWidth - EditorLeftMargin + 3
+	height := f.StatusBarHeight
+
+	xOffset := EditorLeftMargin - 3
+	yOffset := f.TermHeight - height
+
+	borderColor := ansi.NewRGBColor(60, 60, 60)
+
+	// draw the editor mode next to status bar
+
+	render.DrawBox(render.Box{
+		Width: 5, Height: height,
+		X: 0, Y: yOffset,
+		BorderColor: borderColor,
+	}, true)
+
+	ansi.MoveCursor(yOffset+2, 2)
+	fmt.Printf(Blue+"[%c]"+Reset, f.EditorMode)
+
+	// draw the main part of the status bar
+	render.DrawBox(render.Box{
+		Width: width, Height: height,
+		X: xOffset, Y: yOffset,
+		BorderColor: borderColor,
+	}, true)
+
+	ansi.MoveCursor(yOffset+2, EditorLeftMargin)
+	if !f.Saved {
+		fmt.Print(Green + f.Filename + Cyan + Italic + " (Unsaved)" + Reset)
+	} else {
+		fmt.Print(Green + f.Filename + Reset)
 	}
-	drawBox(50, 4, [][]string{
-		{fmt.Sprintf(" Word Count: %d   Viewport Size: (%d, %d)", f.GetBufferCharCount(), width, f.MaxTermHeight)},
-		{fmt.Sprintf(" Ln %d, Col %d     Viewport Offset: (%d, %d)", f.CursorY+1+f.ViewportOffsetY, f.CursorX+1, f.ViewportOffsetX, f.ViewportOffsetY)},
-		{fmt.Sprintf(" Buffer length: %d", len(f.Buffer))},
-		{f.Filename},
-	})
+
+	ansi.MoveCursor(yOffset+2, f.TermWidth-18)
+	fmt.Print("Char count: ", f.GetBufferCharCount())
+
+	// width, _, _ := term.GetSize(int(os.Stdout.Fd()))
+	// if err != nil {
+	// 	fmt.Println(err)
+	// 	return
+	// }
+	// drawBox(50, 4, [][]string{
+	// 	{fmt.Sprintf(" Word Count: %d   Viewport Size: (%d, %d)", f.GetBufferCharCount(), width, f.MaxTermHeight)},
+	// 	{fmt.Sprintf(" Ln %d, Col %d     Viewport Offset: (%d, %d)", f.CursorY+1+f.ViewportOffsetY, f.CursorX+1, f.ViewportOffsetX, f.ViewportOffsetY)},
+	// 	{fmt.Sprintf(" Buffer length: %d", len(f.Buffer))},
+	// 	{f.Filename},
+	// })
 }
 
 func (f FileEditor) Render() {
 	f.PrintBuffer()
+	f.PrintStatusBar()
 }
 
 func (editor *FileEditor) UpdateLoop() {
@@ -246,6 +298,8 @@ updateLoop:
 			case Quit:
 				break updateLoop
 			case KeyboardInput:
+				editor.Render()
+			case EditorModeChange:
 				editor.Render()
 			case Resize:
 				ansi.ClearEntireScreen()
@@ -273,17 +327,25 @@ func (editor *FileEditor) OnInput() int {
 		if isMouseInput {
 			HandleMouseInput(editor, mouseEvent)
 		} else {
-			// HandleEscapeInput(editor, buf[:])
+			ret := HandleEscapeInput(editor, buf[:], n)
+
+			if ret == EditorModeChange {
+				editor.inputChan <- EditorModeChange
+			}
 		}
 	} else {
-		quit := HandleKeyboardInput(editor, buf[0])
+		ret := HandleKeyboardInput(editor, buf[0])
 
-		if quit == 1 {
-			editor.inputChan <- quit
+		switch ret {
+		case Quit:
+			editor.inputChan <- ret
 			return 1
+		case EditorModeChange:
+			editor.inputChan <- ret
+		case 0:
+			editor.inputChan <- ret
 		}
 
-		editor.inputChan <- KeyboardInput
 	}
 
 	return 0

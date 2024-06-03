@@ -1,7 +1,6 @@
 package fileeditor
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -110,12 +109,18 @@ func HandleMouseInput(editor *FileEditor, m MouseInput) {
 	// fmt.Println("Mouse:", m.Event, m.X, m.Y)
 }
 
-func HandleEscapeInput(editor *FileEditor, buf []byte) {
-	if buf[2] == Up || buf[2] == Down || buf[2] == Right || buf[2] == Left {
+func HandleEscapeInput(editor *FileEditor, buf []byte, n int) byte {
+	if n == 3 && buf[2] == Up || buf[2] == Down || buf[2] == Right || buf[2] == Left {
 		editor.Keybindings.MapKeybindToAction(buf[2], true, *editor)
-	} else {
-		fmt.Println("Some other ESC sequence")
+		return 0
 	}
+
+	if n == 1 && buf[0] == Escape {
+		editor.EditorMode = EditorCommandMode
+		return EditorModeChange
+	}
+
+	return 0
 }
 
 /*
@@ -124,13 +129,23 @@ Routes keyboard input to the apprioriate action.
 Returns 1 if an input to quit the program was made, else 0
 is returned.
 */
-func HandleKeyboardInput(editor *FileEditor, key byte) (quit int) {
+func HandleKeyboardInput(editor *FileEditor, key byte) byte {
 	if key == 'q' {
-		return 1
+		return Quit
 	}
 
+	const asciiLowerDif uint8 = 32
+
 	if ansi.IsAlphaChar(key) {
-		// fmt.Println("key:", string(key))
+		if editor.EditorMode == EditorCommandMode {
+			if key == EditorEditMode || key == EditorEditMode+asciiLowerDif {
+				editor.EditorMode = EditorEditMode
+				return EditorModeChange
+			} else if key == EditorViewMode || key == EditorViewMode+asciiLowerDif {
+				editor.EditorMode = EditorViewMode
+				return EditorModeChange
+			}
+		}
 	} else {
 		// fmt.Println("Some other key")
 	}

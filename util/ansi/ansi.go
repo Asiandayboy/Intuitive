@@ -54,6 +54,10 @@ func ShowCursor() {
 	fmt.Print("\x1b[?25h")
 }
 
+func EnableBlinkingLineCursor() {
+	fmt.Print("\033[5 q")
+}
+
 func EraseEntireLine() {
 	fmt.Print("\x1b[2K")
 }

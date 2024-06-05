@@ -117,6 +117,8 @@ func main() {
 
 	editor.Render()
 
+	ansi.EnableBlinkingLineCursor()
+
 	// render loop
 	go func() {
 		editor.UpdateLoop()
@@ -130,7 +132,7 @@ func main() {
 		}
 	}
 
-	ansi.ClearEntireScreen()
 	ansi.DisableMouseReporting()
 	ansi.DisableAlternateScreenBuffer()
+	ansi.ClearEntireScreen()
 }

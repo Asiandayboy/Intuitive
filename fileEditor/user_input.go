@@ -114,21 +114,41 @@ func ReadEscSequence(buf []byte, numBytesReadFromBuf int) (bool, MouseInput) {
 	return false, MouseInput{}
 }
 
-func HandleMouseInput(editor *FileEditor, m MouseInput) {
+// using a debounce to ignore release event
+var lastMouseInputEvent byte = 100
 
-	if m.Event == MouseEventLeftClick {
+func HandleMouseInput(editor *FileEditor, m MouseInput) byte {
+	if m.Event == MouseEventLeftClick && m.Event != lastMouseInputEvent {
 		// constrain cursor to not extend past visual buffer
 		visualBufLen := len(editor.VisualBuffer)
 
 		if m.Y > visualBufLen {
-			ansi.MoveCursor(visualBufLen, len(editor.VisualBuffer[visualBufLen-1])+EditorLeftMargin)
-			return
+			currLineLen := len(editor.VisualBuffer[visualBufLen-1])
+			x := currLineLen + EditorLeftMargin
+
+			ansi.MoveCursor(visualBufLen, x)
+			editor.CursorX = x
+			editor.CursorY = visualBufLen
+			return CursorPositionChange
 		}
 
 		currLineLen := len(editor.VisualBuffer[m.Y-1])
-		ansi.MoveCursor(m.Y, math.Clamp(m.X, EditorLeftMargin, currLineLen+EditorLeftMargin))
+		x := math.Clamp(m.X, EditorLeftMargin, currLineLen+EditorLeftMargin)
+
+		ansi.MoveCursor(m.Y, x)
+		editor.CursorX = x
+		editor.CursorY = m.Y
+
+		lastMouseInputEvent = m.Event
+
+		return CursorPositionChange
 	}
 
+	if lastMouseInputEvent == m.Event {
+		lastMouseInputEvent = 100
+	}
+
+	return 0
 }
 
 func HandleEscapeInput(editor *FileEditor, buf []byte, n int) byte {
@@ -173,5 +193,5 @@ func HandleKeyboardInput(editor *FileEditor, key byte) byte {
 	}
 
 	// editor.Keybindings.MapKeybindToAction(key, false, *editor)
-	return 0
+	return KeyboardInput
 }

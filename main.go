@@ -116,7 +116,7 @@ func main() {
 	ansi.EnableAlternateScreenBuffer()
 	ansi.EnableBlinkingLineCursor()
 
-	editor.Render()
+	editor.Render(0)
 
 	// render loop
 	go func() {

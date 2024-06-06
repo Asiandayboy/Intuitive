@@ -38,6 +38,7 @@ const (
 	KeyboardInput
 	Resize
 	EditorModeChange
+	CursorPositionChange
 )
 
 // the three editor modes a user can be in
@@ -46,6 +47,12 @@ const (
 	EditorEditMode    uint8 = 'E'
 	EditorViewMode    uint8 = 'V'
 )
+
+var modeColors = map[byte]ansi.RGBColor{
+	EditorCommandMode: ansi.NewRGBColor(75, 176, 255), // blue
+	EditorEditMode:    ansi.NewRGBColor(216, 148, 53), // orange
+	EditorViewMode:    ansi.NewRGBColor(158, 75, 253), // purple
+}
 
 /*
 left margin accounts for the line numbers, and the vertical border
@@ -59,25 +66,32 @@ left margin accounts for the line numbers, and the vertical border
 const EditorLeftMargin int = 8
 
 type FileEditor struct {
-	Filename        string
-	FileBuffer      []string
-	VisualBuffer    []string
-	file            *os.File
-	CursorX         int
-	CursorY         int
+	Saved       bool
+	EditorMode  byte
+	Keybindings Keybind
+	file        *os.File
+	Filename    string
+	inputChan   chan byte
+
+	FileBuffer         []string // contains each line of the actual file
+	VisualBuffer       []string // contains word wrapped lines; this is what gets rendered to the screen
+	VisualBufferMapped []int    // contains the ending index (1-indexed) of word-wrapped lines
+	apparentCursorX    int
+	apparentCursorY    int
+	bufferLine         int // refers to current line of FileBuffer; used when editing FileBuffer
+	bufferIndex        int // refers to current index of current line of FileBuffer; used when editing FileBuffer
+	TermWidth          int
+	TermHeight         int
+	EditorWidth        int // refers to how many characters can fit on a single line
+	MaxTermHeight      int
+	StatusBarHeight    int
+
 	ViewportOffsetX int
 	ViewportOffsetY int
-	TermWidth       int
-	TermHeight      int
-	MaxTermHeight   int
-	StatusBarHeight int
-	Saved           bool
-	EditorMode      byte
-	Keybindings     Keybind
-	inputChan       chan byte
 
-	maxCursorX int
-	maxCursorY int
+	maxCursorX int // used to constrain and snap cursor
+	maxCursorY int // used to constrain and snap cursor
+
 }
 
 func NewFileEditor(filename string) FileEditor {
@@ -87,17 +101,19 @@ func NewFileEditor(filename string) FileEditor {
 	}
 
 	return FileEditor{
-		Filename:        filename,
-		FileBuffer:      make([]string, 0),
-		VisualBuffer:    make([]string, 0),
-		TermWidth:       width,
-		TermHeight:      height,
-		MaxTermHeight:   height,
-		StatusBarHeight: 3,
-		Saved:           false,
-		EditorMode:      EditorCommandMode,
-		Keybindings:     NewKeybind(),
-		inputChan:       make(chan byte, 1),
+		Filename:           filename,
+		FileBuffer:         make([]string, 0),
+		VisualBuffer:       make([]string, 0),
+		VisualBufferMapped: make([]int, 0),
+		TermWidth:          width,
+		TermHeight:         height,
+		EditorWidth:        width - EditorLeftMargin + 1,
+		MaxTermHeight:      height,
+		StatusBarHeight:    3,
+		Saved:              false,
+		EditorMode:         EditorCommandMode,
+		Keybindings:        NewKeybind(),
+		inputChan:          make(chan byte, 1),
 	}
 }
 
@@ -138,13 +154,48 @@ func (f *FileEditor) ReadFileToBuffer() error {
 
 	if rowCount == 0 {
 		f.FileBuffer = append(f.FileBuffer, "")
+		rowCount++
 	}
 
-	// // set cursor's initial position to end of file
-	// if rowCount > 0 {
-	// 	f.CursorX = len(f.Buffer[rowCount-1])
-	// 	f.CursorY = rowCount - 1
-	// }
+	var maxHeight int = f.TermHeight - f.StatusBarHeight
+	var maxWidth int = f.TermWidth - EditorLeftMargin
+
+	// initialize bufferLine and bufferIndex
+	// initialize mapped visual buffer
+	// initalize visual buffer to determine initial cursor position
+	var end int = 1
+	for i := 0; i < maxHeight; i++ {
+		if i >= rowCount {
+			break
+		}
+
+		line := f.FileBuffer[i]
+		n := len(line)
+
+		if n >= maxWidth {
+			wrappedLines := f.GetWordWrappedLines(line, maxWidth)
+
+			end += len(wrappedLines) - 1
+			f.VisualBuffer = append(f.VisualBuffer, wrappedLines...)
+			f.VisualBufferMapped = append(f.VisualBufferMapped, end)
+		} else {
+			f.VisualBuffer = append(f.VisualBuffer, line)
+			f.VisualBufferMapped = append(f.VisualBufferMapped, end)
+		}
+		end++
+	}
+
+	// set cursor's initial position to beginning of file
+	f.apparentCursorX = EditorLeftMargin
+	f.apparentCursorY = 1
+
+	//// the commented code sets the cursor to end of file
+	// n := len(f.VisualBuffer)
+	// f.apparentCursorX = len(f.VisualBuffer[n-1]) + EditorLeftMargin
+	// f.apparentCursorY = len(f.VisualBuffer)
+
+	f.bufferLine = 0
+	f.bufferIndex = 0
 
 	return scanner.Err()
 }
@@ -173,6 +224,7 @@ func (f *FileEditor) PrintBuffer() {
 	lineNumColor := ansi.NewRGBColor(80, 80, 80).ToFgColorANSI()
 	borderColor := ansi.NewRGBColor(60, 60, 60).ToFgColorANSI()
 	wrappedColor := ansi.NewRGBColor(60, 60, 60).ToFgColorANSI()
+	currRowColor := modeColors[f.EditorMode].ToFgColorANSI()
 
 	/*
 		The status bar height is subtracted from the terminal height to avoid the unnecessary scrolling,
@@ -182,43 +234,66 @@ func (f *FileEditor) PrintBuffer() {
 	*/
 	var maxHeight int = f.TermHeight - f.StatusBarHeight
 
-	var maxWidth int = f.TermWidth - EditorLeftMargin
-
 	f.maxCursorX = 0
 	f.maxCursorY = 0
 
+	// refresh visual buffer and mapped buffer
 	f.VisualBuffer = []string{}
+	f.VisualBufferMapped = []int{}
 
 	ansi.MoveCursor(0, 0)
 
+	var end int = 1
 	for i := 0; i < maxHeight; i++ {
 		if i >= len(f.FileBuffer) {
 			fmt.Printf("%s   ~ %s%s%s\n", lineNumColor, borderColor, Vertical, Reset)
 		} else {
 			line := f.FileBuffer[i]
 
-			if len(line) >= maxWidth {
-				wordWrappedLines := f.GetWordWrappedLines(line, maxWidth)
+			if len(line) >= f.EditorWidth {
+				wordWrappedLines := f.GetWordWrappedLines(line, f.EditorWidth)
+
+				end += len(wordWrappedLines) - 1
 
 				for j, l := range wordWrappedLines {
 					if j == 0 {
-						fmt.Printf("%s%4d %s%s%s %s\n", lineNumColor, i+1, borderColor, Vertical, Reset, l)
+						if f.bufferLine == i { //  highlighting line number
+							fmt.Printf("%s%s%4d %s%s%s %s\n", lineNumColor, currRowColor, i+1, borderColor, Vertical, Reset, l)
+						} else {
+							fmt.Printf("%s%4d %s%s%s %s\n", lineNumColor, i+1, borderColor, Vertical, Reset, l)
+						}
 					} else {
-						fmt.Printf("%s   %s%s %s%s%s %s\n", lineNumColor, wrappedColor, Vertical, borderColor, Vertical, Reset, l)
+						if f.bufferLine == i {
+							fmt.Printf("%s   %s", lineNumColor, currRowColor)
+						} else {
+							fmt.Printf("%s   %s", lineNumColor, wrappedColor)
+						}
+
+						if j == len(wordWrappedLines)-1 {
+							fmt.Printf("%s %s%s%s %s\n", BotLCorner, borderColor, Vertical, Reset, l)
+						} else {
+							fmt.Printf("%s %s%s%s %s\n", Vertical, borderColor, Vertical, Reset, l)
+						}
 					}
 
 					maxHeight--
 					f.maxCursorX = len(l) + EditorLeftMargin
 					f.maxCursorY += 1
-					f.VisualBuffer = append(f.VisualBuffer, l)
 				}
+				f.VisualBuffer = append(f.VisualBuffer, wordWrappedLines...)
+				f.VisualBufferMapped = append(f.VisualBufferMapped, end)
 			} else {
-				fmt.Printf("%s%4d %s%s%s %s\n", lineNumColor, i+1, borderColor, Vertical, Reset, line)
+				if f.bufferLine == i {
+					fmt.Printf("%s%s%4d %s%s%s %s\n", lineNumColor, currRowColor, i+1, borderColor, Vertical, Reset, line)
+				} else {
+					fmt.Printf("%s%4d %s%s%s %s\n", lineNumColor, i+1, borderColor, Vertical, Reset, line)
+				}
 				f.VisualBuffer = append(f.VisualBuffer, line)
+				f.VisualBufferMapped = append(f.VisualBufferMapped, end)
 				f.maxCursorX = len(line) + EditorLeftMargin
 				f.maxCursorY += 1
 			}
-
+			end++
 		}
 	}
 
@@ -232,12 +307,6 @@ func (f FileEditor) PrintStatusBar() {
 	yOffset := f.TermHeight - height
 
 	borderColor := ansi.NewRGBColor(60, 60, 60)
-
-	modeColors := map[byte]ansi.RGBColor{
-		EditorCommandMode: ansi.NewRGBColor(75, 176, 255), // blue
-		EditorEditMode:    ansi.NewRGBColor(216, 148, 53), // orange
-		EditorViewMode:    ansi.NewRGBColor(158, 75, 253), // purple
-	}
 
 	// draw the editor mode next to status bar
 	render.DrawBox(render.Box{
@@ -264,18 +333,47 @@ func (f FileEditor) PrintStatusBar() {
 		fmt.Print(Green + f.Filename + Reset)
 	}
 
-	wordCountColor := ansi.NewRGBColor(100, 100, 100).ToFgColorANSI()
+	// draw cursor position
+	ansi.MoveCursor(yOffset+2, f.TermWidth-25)
+	fmt.Printf(modeColors[f.EditorMode].ToFgColorANSI()+"%d:%d"+Reset, f.apparentCursorY, f.apparentCursorX-EditorLeftMargin+1)
 
 	// draw word count
+	wordCountColor := ansi.NewRGBColor(120, 120, 120).ToFgColorANSI()
+
 	ansi.MoveCursor(yOffset+2, f.TermWidth-18)
 	fmt.Print(wordCountColor+"Char count: ", f.GetBufferCharCount(), Reset)
+
+	// debugging pu rposes
+	ansi.MoveCursor(yOffset+2, f.TermWidth-50)
+	fmt.Print("l:", f.bufferLine, " i:", f.bufferIndex)
+
+	ansi.MoveCursorRight(3)
+	fmt.Print("Width:", f.EditorWidth)
 }
 
-func (f *FileEditor) Render() {
+func (f *FileEditor) Render(flag byte) {
 	ansi.HideCursor()
 
+	if flag == CursorPositionChange {
+		f.UpdateBufferIndicies()
+	}
+
 	f.PrintBuffer()
+
+	switch flag {
+	case Resize:
+		{
+			newACX, newACY := CalcNewACXY(
+				f.VisualBufferMapped, f.bufferLine,
+				f.bufferIndex, f.EditorWidth,
+			)
+			f.apparentCursorX = newACX + EditorLeftMargin - 1
+			f.apparentCursorY = newACY
+		}
+	}
+
 	f.PrintStatusBar()
+	ansi.MoveCursor(f.apparentCursorY, f.apparentCursorX)
 
 	ansi.ShowCursor()
 }
@@ -295,14 +393,17 @@ updateLoop:
 			case Quit:
 				break updateLoop
 			case KeyboardInput:
-				editor.Render()
+				editor.Render(KeyboardInput)
 			case EditorModeChange:
-				editor.Render()
+				editor.Render(EditorModeChange)
 			case Resize:
 				ansi.ClearEntireScreen()
 				editor.TermHeight = termH
 				editor.TermWidth = termW
-				editor.Render()
+				editor.EditorWidth = termW - EditorLeftMargin + 1
+				editor.Render(Resize)
+			case CursorPositionChange:
+				editor.Render(CursorPositionChange)
 			}
 		default:
 		}
@@ -321,7 +422,12 @@ func (editor *FileEditor) OnInput() int {
 		isMouseInput, mouseEvent := ReadEscSequence(buf[:], n)
 
 		if isMouseInput {
-			HandleMouseInput(editor, mouseEvent)
+			ret := HandleMouseInput(editor, mouseEvent)
+
+			switch ret {
+			case CursorPositionChange:
+				editor.inputChan <- ret
+			}
 		} else {
 			ret := HandleEscapeInput(editor, buf[:], n)
 
@@ -338,7 +444,7 @@ func (editor *FileEditor) OnInput() int {
 			return 1
 		case EditorModeChange:
 			editor.inputChan <- ret
-		case 0:
+		case KeyboardInput:
 			editor.inputChan <- ret
 		}
 

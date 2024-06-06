@@ -120,24 +120,25 @@ var lastMouseInputEvent byte = 100
 func HandleMouseInput(editor *FileEditor, m MouseInput) byte {
 	if m.Event == MouseEventLeftClick && m.Event != lastMouseInputEvent {
 		// constrain cursor to not extend past visual buffer
-		visualBufLen := len(editor.VisualBuffer)
+		// and update bufferLine and bufferIndex
+		y := len(editor.VisualBuffer)
 
-		if m.Y > visualBufLen {
-			currLineLen := len(editor.VisualBuffer[visualBufLen-1])
+		if m.Y > y {
+			currLineLen := len(editor.VisualBuffer[y-1])
 			x := currLineLen + EditorLeftMargin
 
-			ansi.MoveCursor(visualBufLen, x)
-			editor.CursorX = x
-			editor.CursorY = visualBufLen
+			editor.apparentCursorX = x
+			editor.apparentCursorY = y
+			ansi.MoveCursor(y, x)
 			return CursorPositionChange
 		}
 
 		currLineLen := len(editor.VisualBuffer[m.Y-1])
 		x := math.Clamp(m.X, EditorLeftMargin, currLineLen+EditorLeftMargin)
 
+		editor.apparentCursorX = x
+		editor.apparentCursorY = m.Y
 		ansi.MoveCursor(m.Y, x)
-		editor.CursorX = x
-		editor.CursorY = m.Y
 
 		lastMouseInputEvent = m.Event
 

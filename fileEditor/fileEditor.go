@@ -373,8 +373,6 @@ func (f *FileEditor) Render(flag byte) {
 				f.bufferLine, f.VisualBuffer, f.VisualBufferMapped,
 			)
 
-			fmt.Println(indexCheck, f.bufferIndex)
-
 			if indexCheck != f.bufferIndex {
 				newACX = f.EditorWidth
 			}

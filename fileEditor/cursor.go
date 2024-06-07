@@ -119,6 +119,10 @@ func CalcNewACXY(
 	newACY = start + y
 	newACX = bufferIndex % (newEditorWidth - 1)
 
+	if newACX == 0 {
+		newACX = newEditorWidth - 1
+	}
+
 	return newACX, newACY
 }
 

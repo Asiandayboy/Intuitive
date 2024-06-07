@@ -367,8 +367,21 @@ func (f *FileEditor) Render(flag byte) {
 				f.VisualBufferMapped, f.bufferLine,
 				f.bufferIndex, f.EditorWidth,
 			)
+
+			indexCheck := CalcBufferIndexFromACXY(
+				newACX, newACY,
+				f.bufferLine, f.VisualBuffer, f.VisualBufferMapped,
+			)
+
+			fmt.Println(indexCheck, f.bufferIndex)
+
+			if indexCheck != f.bufferIndex {
+				newACX = f.EditorWidth
+			}
+
 			f.apparentCursorX = newACX + EditorLeftMargin - 1
 			f.apparentCursorY = newACY
+
 		}
 	}
 

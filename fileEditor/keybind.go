@@ -85,7 +85,7 @@ func NewKeybind() Keybind {
 Executes the action binded to the key based on the user's
 keybindings
 */
-func (k Keybind) MapKeybindToAction(key byte, isArrowKey bool, editor FileEditor) {
+func (k Keybind) MapKeybindToAction(key byte, isArrowKey bool, editor *FileEditor) {
 	keybindings := map[byte]actionFunc{
 		k.cursorLeft:  editor.actionCursorLeft,
 		k.cursorRight: editor.actionCursorRight,

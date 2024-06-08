@@ -154,10 +154,11 @@ func HandleMouseInput(editor *FileEditor, m MouseInput) byte {
 
 func HandleEscapeInput(editor *FileEditor, buf []byte, n int) byte {
 	if n == 3 && buf[2] == Up || buf[2] == Down || buf[2] == Right || buf[2] == Left {
-		editor.Keybindings.MapKeybindToAction(buf[2], true, *editor)
-		return 0
+		editor.Keybindings.MapKeybindToAction(buf[2], true, editor)
+		return CursorPositionChange
 	}
 
+	// Return to Command mode
 	if n == 1 && buf[0] == Escape {
 		editor.EditorMode = EditorCommandMode
 		return EditorModeChange
@@ -180,6 +181,7 @@ func HandleKeyboardInput(editor *FileEditor, key byte) byte {
 	const asciiLowerDif uint8 = 32
 
 	if ansi.IsAlphaChar(key) {
+		// Transition to View or Edit mode
 		if editor.EditorMode == EditorCommandMode {
 			if key == EditorEditMode || key == EditorEditMode+asciiLowerDif {
 				editor.EditorMode = EditorEditMode
@@ -189,6 +191,11 @@ func HandleKeyboardInput(editor *FileEditor, key byte) byte {
 				return EditorModeChange
 			}
 		}
+
+		if editor.EditorMode == EditorEditMode {
+			fmt.Println("Typing:", key)
+		}
+
 	} else {
 		fmt.Println("Some other key")
 	}

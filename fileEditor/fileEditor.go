@@ -442,7 +442,10 @@ func (editor *FileEditor) OnInput() int {
 		} else {
 			ret := HandleEscapeInput(editor, buf[:], n)
 
-			if ret == EditorModeChange {
+			switch ret {
+			case CursorPositionChange:
+				editor.inputChan <- CursorPositionChange
+			case EditorModeChange:
 				editor.inputChan <- EditorModeChange
 			}
 		}
@@ -451,12 +454,12 @@ func (editor *FileEditor) OnInput() int {
 
 		switch ret {
 		case Quit:
-			editor.inputChan <- ret
+			editor.inputChan <- Quit
 			return 1
 		case EditorModeChange:
-			editor.inputChan <- ret
+			editor.inputChan <- EditorModeChange
 		case KeyboardInput:
-			editor.inputChan <- ret
+			editor.inputChan <- KeyboardInput
 		}
 
 	}

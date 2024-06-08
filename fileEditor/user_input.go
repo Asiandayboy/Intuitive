@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/Asiandayboy/CLITextEditor/util/ansi"
-	"github.com/Asiandayboy/CLITextEditor/util/math"
 )
 
 /*
@@ -119,30 +118,8 @@ var lastMouseInputEvent byte = 100
 
 func HandleMouseInput(editor *FileEditor, m MouseInput) byte {
 	if m.Event == MouseEventLeftClick && m.Event != lastMouseInputEvent {
-		// constrain cursor to not extend past visual buffer
-		// and update bufferLine and bufferIndex
-		y := len(editor.VisualBuffer)
-
-		if m.Y > y {
-			currLineLen := len(editor.VisualBuffer[y-1])
-			x := currLineLen + EditorLeftMargin
-
-			editor.apparentCursorX = x
-			editor.apparentCursorY = y
-			ansi.MoveCursor(y, x)
-			return CursorPositionChange
-		}
-
-		currLineLen := len(editor.VisualBuffer[m.Y-1])
-		x := math.Clamp(m.X, EditorLeftMargin, currLineLen+EditorLeftMargin)
-
-		editor.apparentCursorX = x
-		editor.apparentCursorY = m.Y
-		ansi.MoveCursor(m.Y, x)
-
 		lastMouseInputEvent = m.Event
-
-		return CursorPositionChange
+		return editor.SetCursorPosition(m)
 	}
 
 	if lastMouseInputEvent == m.Event {

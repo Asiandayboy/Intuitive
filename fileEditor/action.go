@@ -18,6 +18,11 @@ func setSavedCursorX(cursorX int, saveFlag bool) {
 }
 
 func verticallyConstrainCursor(f *FileEditor) {
+	/*
+		Constrain cursor vertically when moving cursor up and down
+		with keys, keeping the acX clamped from its initial position
+		on the first up or down
+	*/
 	line := f.VisualBuffer[f.apparentCursorY-1]
 
 	if !savedCursorXFlag {
@@ -37,6 +42,35 @@ func verticallyConstrainCursor(f *FileEditor) {
 
 func (f *FileEditor) actionDeleteText(key byte) {
 	fmt.Println("delete text")
+}
+
+func (f *FileEditor) SetCursorPosition(m MouseInput) byte {
+	/*
+		constrain cursor horizontally and vertically to not extend
+		past visual buffer
+	*/
+	y := len(f.VisualBuffer)
+
+	if m.Y > y {
+		currLineLen := len(f.VisualBuffer[y-1])
+		x := currLineLen + EditorLeftMargin
+
+		f.apparentCursorX = x
+		f.apparentCursorY = y
+		setSavedCursorX(x, false)
+		ansi.MoveCursor(y, x)
+		return CursorPositionChange
+	}
+
+	currLineLen := len(f.VisualBuffer[m.Y-1])
+	x := math.Clamp(m.X, EditorLeftMargin, currLineLen+EditorLeftMargin)
+
+	f.apparentCursorX = x
+	f.apparentCursorY = m.Y
+	setSavedCursorX(x, false)
+	ansi.MoveCursor(m.Y, x)
+
+	return CursorPositionChange
 }
 
 func (f *FileEditor) actionCursorLeft(key byte) {

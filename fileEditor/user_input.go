@@ -1,7 +1,6 @@
 package fileeditor
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -144,12 +143,6 @@ func HandleEscapeInput(editor *FileEditor, buf []byte, n int) byte {
 	return 0
 }
 
-/*
-Routes keyboard input to the apprioriate action.
-
-Returns 1 if an input to quit the program was made, else 0
-is returned.
-*/
 func HandleKeyboardInput(editor *FileEditor, key byte) byte {
 	if key == 'q' {
 		return Quit
@@ -170,11 +163,17 @@ func HandleKeyboardInput(editor *FileEditor, key byte) byte {
 		}
 
 		if editor.EditorMode == EditorEditMode {
-			fmt.Println("Typing:", key)
+			editor.actionTyping(key)
 		}
 
 	} else {
-		fmt.Println("Some other key")
+		if editor.EditorMode == EditorEditMode {
+			if key == NewLine {
+				editor.actionNewLine(key)
+			} else if key == Backspace {
+				editor.actionDeleteText(key)
+			}
+		}
 	}
 
 	// editor.Keybindings.MapKeybindToAction(key, false, *editor)

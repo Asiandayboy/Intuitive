@@ -100,11 +100,7 @@ func (k Keybind) MapKeybindToAction(key byte, isArrowKey bool, editor *FileEdito
 		if key == Up || key == Down || key == Right || key == Left {
 			if isArrowKey { // typing arrow keys, which are also A, B, C or D
 				action(key)
-			} else { // typing capital lettters A, B, C or D
-				editor.actionTyping(key)
 			}
-		} else {
-			action(key)
 		}
 	}
 }

@@ -125,7 +125,7 @@ func (f *FileEditor) actionNewLine() {
 	// insert the new line (afterSplit) in the middle of buffer array
 	result := make([]string, len(f.FileBuffer)+1)
 
-	copy(result, f.FileBuffer[:f.bufferLine-1])
+	copy(result, f.FileBuffer[:f.bufferLine])
 
 	result[f.bufferLine] = beforeSplit
 	result[f.bufferLine+1] = afterSplit

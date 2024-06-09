@@ -169,7 +169,7 @@ func HandleKeyboardInput(editor *FileEditor, key byte) byte {
 	} else {
 		if editor.EditorMode == EditorEditMode {
 			if key == NewLine {
-				editor.actionNewLine(key)
+				editor.actionNewLine()
 			} else if key == Backspace {
 				editor.actionDeleteText(key)
 			}

@@ -246,6 +246,7 @@ func (f *FileEditor) PrintBuffer() {
 	var end int = 1
 	for i := 0; i < maxHeight; i++ {
 		if i >= len(f.FileBuffer) {
+			ansi.EraseEntireLine()
 			fmt.Printf("%s   ~ %s%s%s\n", lineNumColor, borderColor, Vertical, Reset)
 		} else {
 			line := f.FileBuffer[i]
@@ -256,6 +257,7 @@ func (f *FileEditor) PrintBuffer() {
 				end += len(wordWrappedLines) - 1
 
 				for j, l := range wordWrappedLines {
+					ansi.EraseEntireLine()
 					if j == 0 {
 						if f.bufferLine == i { //  highlighting line number
 							fmt.Printf("%s%s%4d %s%s%s %s\n", lineNumColor, currRowColor, i+1, borderColor, Vertical, Reset, l)
@@ -283,6 +285,7 @@ func (f *FileEditor) PrintBuffer() {
 				f.VisualBuffer = append(f.VisualBuffer, wordWrappedLines...)
 				f.VisualBufferMapped = append(f.VisualBufferMapped, end)
 			} else {
+				ansi.EraseEntireLine()
 				if f.bufferLine == i {
 					fmt.Printf("%s%s%4d %s%s%s %s\n", lineNumColor, currRowColor, i+1, borderColor, Vertical, Reset, line)
 				} else {

@@ -40,10 +40,6 @@ func verticallyConstrainCursor(f *FileEditor) {
 	}
 }
 
-func (f *FileEditor) actionDeleteText(key byte) {
-	fmt.Println("delete text")
-}
-
 func (f *FileEditor) SetCursorPosition(m MouseInput) byte {
 	/*
 		constrain cursor horizontally and vertically to not extend
@@ -116,14 +112,33 @@ func (f *FileEditor) actionCursorDown(key byte) {
 
 }
 
-func (f *FileEditor) actionNewLine(key byte) {
-	fmt.Println("new line")
+/*
+Adds a new line by mutating the FileBuffer
+*/
+func (f *FileEditor) actionNewLine() {
+	// split the current line
+	line := f.FileBuffer[f.bufferLine]
+
+	beforeSplit := line[:f.bufferIndex]
+	afterSplit := line[f.bufferIndex:]
+
+	// insert the new line (afterSplit) in the middle of buffer array
+	result := make([]string, len(f.FileBuffer)+1)
+
+	copy(result, f.FileBuffer[:f.bufferLine-1])
+
+	result[f.bufferLine] = beforeSplit
+	result[f.bufferLine+1] = afterSplit
+
+	copy(result[f.bufferLine+2:], f.FileBuffer[f.bufferLine+1:])
+
+	f.FileBuffer = result
 }
 
 func (f *FileEditor) actionTyping(key byte) {
-	if ansi.IsAlphaChar(key) {
-		fmt.Println(string(key))
-	} else { // typing a char that is not printable
-		fmt.Println("typing")
-	}
+	fmt.Println("typing:", string(key))
+}
+
+func (f *FileEditor) actionDeleteText(key byte) {
+	fmt.Println("backspace: delete text")
 }

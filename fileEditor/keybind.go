@@ -76,8 +76,6 @@ func NewKeybind() Keybind {
 		cursorDown:  'B',
 		cursorRight: 'C',
 		cursorLeft:  'D',
-		newLine:     NewLine,
-		deleteText:  Backspace,
 	}
 }
 
@@ -91,8 +89,6 @@ func (k Keybind) MapKeybindToAction(key byte, isArrowKey bool, editor *FileEdito
 		k.cursorRight: editor.actionCursorRight,
 		k.cursorUp:    editor.actionCursorUp,
 		k.cursorDown:  editor.actionCursorDown,
-		k.newLine:     editor.actionNewLine,
-		k.deleteText:  editor.actionDeleteText,
 	}
 
 	action, exists := keybindings[key]

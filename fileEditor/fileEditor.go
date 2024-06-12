@@ -36,9 +36,11 @@ const (
 const (
 	Quit byte = iota + 1
 	KeyboardInput
-	Resize
+	WindowResize
 	EditorModeChange
 	CursorPositionChange
+	NewLineInserted
+	NewLineInsertedAtLineEnd
 )
 
 // the three editor modes a user can be in
@@ -88,10 +90,6 @@ type FileEditor struct {
 
 	ViewportOffsetX int
 	ViewportOffsetY int
-
-	maxCursorX int // used to constrain and snap cursor
-	maxCursorY int // used to constrain and snap cursor
-
 }
 
 func NewFileEditor(filename string) FileEditor {
@@ -157,43 +155,12 @@ func (f *FileEditor) ReadFileToBuffer() error {
 		rowCount++
 	}
 
-	var maxHeight int = f.TermHeight - f.StatusBarHeight
-	var maxWidth int = f.TermWidth - EditorLeftMargin
-
-	// initialize bufferLine and bufferIndex
-	// initialize mapped visual buffer
-	// initalize visual buffer to determine initial cursor position
-	var end int = 1
-	for i := 0; i < maxHeight; i++ {
-		if i >= rowCount {
-			break
-		}
-
-		line := f.FileBuffer[i]
-		n := len(line)
-
-		if n >= maxWidth {
-			wrappedLines := f.GetWordWrappedLines(line, maxWidth)
-
-			end += len(wrappedLines) - 1
-			f.VisualBuffer = append(f.VisualBuffer, wrappedLines...)
-			f.VisualBufferMapped = append(f.VisualBufferMapped, end)
-		} else {
-			f.VisualBuffer = append(f.VisualBuffer, line)
-			f.VisualBufferMapped = append(f.VisualBufferMapped, end)
-		}
-		end++
-	}
+	// initalize visual buffers to determine initial cursor position
+	f.RefreshVisualBuffers()
 
 	// set cursor's initial position to beginning of file
 	f.apparentCursorX = EditorLeftMargin
 	f.apparentCursorY = 1
-
-	//// the commented code sets the cursor to end of file
-	// n := len(f.VisualBuffer)
-	// f.apparentCursorX = len(f.VisualBuffer[n-1]) + EditorLeftMargin
-	// f.apparentCursorY = len(f.VisualBuffer)
-
 	f.bufferLine = 0
 	f.bufferIndex = 0
 
@@ -234,72 +201,45 @@ func (f *FileEditor) PrintBuffer() {
 	*/
 	var maxHeight int = f.TermHeight - f.StatusBarHeight
 
-	f.maxCursorX = 0
-	f.maxCursorY = 0
-
-	// refresh visual buffer and mapped buffer
-	f.VisualBuffer = []string{}
-	f.VisualBufferMapped = []int{}
-
 	ansi.MoveCursor(0, 0)
 
-	var end int = 1
-	for i := 0; i < maxHeight; i++ {
-		if i >= len(f.FileBuffer) {
-			ansi.EraseEntireLine()
-			fmt.Printf("%s   ~ %s%s%s\n", lineNumColor, borderColor, Vertical, Reset)
-		} else {
-			line := f.FileBuffer[i]
+	var lastIdx int = -1
+	for i, line := range f.VisualBuffer {
+		ansi.EraseEntireLine()
 
-			if len(line) >= f.EditorWidth {
-				wordWrappedLines := f.GetWordWrappedLines(line, f.EditorWidth)
-
-				end += len(wordWrappedLines) - 1
-
-				for j, l := range wordWrappedLines {
-					ansi.EraseEntireLine()
-					if j == 0 {
-						if f.bufferLine == i { //  highlighting line number
-							fmt.Printf("%s%s%4d %s%s%s %s\n", lineNumColor, currRowColor, i+1, borderColor, Vertical, Reset, l)
-						} else {
-							fmt.Printf("%s%4d %s%s%s %s\n", lineNumColor, i+1, borderColor, Vertical, Reset, l)
-						}
-					} else {
-						if f.bufferLine == i {
-							fmt.Printf("%s   %s", lineNumColor, currRowColor)
-						} else {
-							fmt.Printf("%s   %s", lineNumColor, wrappedColor)
-						}
-
-						if j == len(wordWrappedLines)-1 {
-							fmt.Printf("%s %s%s%s %s\n", BotLCorner, borderColor, Vertical, Reset, l)
-						} else {
-							fmt.Printf("%s %s%s%s %s\n", Vertical, borderColor, Vertical, Reset, l)
-						}
-					}
-
-					maxHeight--
-					f.maxCursorX = len(l) + EditorLeftMargin
-					f.maxCursorY += 1
-				}
-				f.VisualBuffer = append(f.VisualBuffer, wordWrappedLines...)
-				f.VisualBufferMapped = append(f.VisualBufferMapped, end)
+		currIdx := CalcBufferLineFromACY(i+1, f.VisualBufferMapped)
+		if lastIdx == currIdx {
+			if f.bufferLine == currIdx {
+				fmt.Printf("%s   %s", lineNumColor, currRowColor)
 			} else {
-				ansi.EraseEntireLine()
-				if f.bufferLine == i {
-					fmt.Printf("%s%s%4d %s%s%s %s\n", lineNumColor, currRowColor, i+1, borderColor, Vertical, Reset, line)
-				} else {
-					fmt.Printf("%s%4d %s%s%s %s\n", lineNumColor, i+1, borderColor, Vertical, Reset, line)
-				}
-				f.VisualBuffer = append(f.VisualBuffer, line)
-				f.VisualBufferMapped = append(f.VisualBufferMapped, end)
-				f.maxCursorX = len(line) + EditorLeftMargin
-				f.maxCursorY += 1
+				fmt.Printf("%s   %s", lineNumColor, wrappedColor)
 			}
-			end++
+
+			nextIdx := CalcBufferLineFromACY(i+2, f.VisualBufferMapped)
+
+			if currIdx != nextIdx || i+1 == f.VisualBufferMapped[len(f.VisualBufferMapped)-1] {
+				fmt.Printf("%s %s%s%s %s\n", BotLCorner, borderColor, Vertical, Reset, line)
+			} else {
+				fmt.Printf("%s %s%s%s %s\n", Vertical, borderColor, Vertical, Reset, line)
+			}
+
+		} else {
+			if f.bufferLine == currIdx {
+				fmt.Printf("%s%s%4d %s%s%s %s\n", lineNumColor, currRowColor, currIdx+1, borderColor, Vertical, Reset, line)
+			} else {
+				fmt.Printf("%s%4d %s%s%s %s\n", lineNumColor, currIdx+1, borderColor, Vertical, Reset, line)
+			}
 		}
+
+		maxHeight--
+		lastIdx = currIdx
 	}
 
+	// print the remaining empty spaces
+	for range maxHeight {
+		ansi.EraseEntireLine()
+		fmt.Printf("%s   ~ %s%s%s\n", lineNumColor, borderColor, Vertical, Reset)
+	}
 }
 
 func (f FileEditor) PrintStatusBar() {
@@ -349,22 +289,28 @@ func (f FileEditor) PrintStatusBar() {
 	// debugging pu rposes
 	ansi.MoveCursor(yOffset+2, f.TermWidth-50)
 	fmt.Print("l:", f.bufferLine, " i:", f.bufferIndex)
-
-	ansi.MoveCursorRight(3)
-	fmt.Print("Width:", f.EditorWidth)
 }
 
 func (f *FileEditor) Render(flag byte) {
 	ansi.HideCursor()
 
-	if flag == CursorPositionChange {
+	// visual buffers are already refreshed when a new line is inserted at the end of a line
+	if flag != NewLineInsertedAtLineEnd {
+		f.RefreshVisualBuffers()
+	}
+
+	if flag == CursorPositionChange ||
+		flag == KeyboardInput ||
+		flag == NewLineInserted ||
+		flag == NewLineInsertedAtLineEnd {
+
 		f.UpdateBufferIndicies()
 	}
 
 	f.PrintBuffer()
 
 	switch flag {
-	case Resize:
+	case WindowResize:
 		{
 			newACX, newACY := CalcNewACXY(
 				f.VisualBufferMapped, f.bufferLine,
@@ -387,18 +333,18 @@ func (f *FileEditor) Render(flag byte) {
 	}
 
 	f.PrintStatusBar()
-	ansi.MoveCursor(f.apparentCursorY, f.apparentCursorX)
 
+	ansi.MoveCursor(f.apparentCursorY, f.apparentCursorX)
 	ansi.ShowCursor()
 }
 
-func (editor *FileEditor) UpdateLoop() {
+func (editor *FileEditor) RenderLoop() {
 updateLoop:
 	for {
 		termW, termH, _ := term.GetSize(int(os.Stdout.Fd()))
 
 		if !(termW == editor.TermWidth && termH == editor.TermHeight) { // resize
-			editor.inputChan <- Resize
+			editor.inputChan <- WindowResize
 		}
 
 		select {
@@ -406,25 +352,22 @@ updateLoop:
 			switch code {
 			case Quit:
 				break updateLoop
-			case KeyboardInput:
-				editor.Render(KeyboardInput)
-			case EditorModeChange:
-				editor.Render(EditorModeChange)
-			case Resize:
+			case KeyboardInput, EditorModeChange, CursorPositionChange,
+				NewLineInserted, NewLineInsertedAtLineEnd:
+				editor.Render(code)
+			case WindowResize:
 				ansi.ClearEntireScreen()
 				editor.TermHeight = termH
 				editor.TermWidth = termW
 				editor.EditorWidth = termW - EditorLeftMargin + 1
-				editor.Render(Resize)
-			case CursorPositionChange:
-				editor.Render(CursorPositionChange)
+				editor.Render(WindowResize)
 			}
 		default:
 		}
 	}
 }
 
-func (editor *FileEditor) OnInput() int {
+func (editor *FileEditor) InputLoop() int {
 	var buf [16]byte
 	n, err := os.Stdin.Read(buf[:])
 	if err != nil {
@@ -459,145 +402,11 @@ func (editor *FileEditor) OnInput() int {
 		case Quit:
 			editor.inputChan <- Quit
 			return 1
-		case EditorModeChange:
-			editor.inputChan <- EditorModeChange
-		case KeyboardInput:
-			editor.inputChan <- KeyboardInput
+		default:
+			editor.inputChan <- ret
 		}
 
 	}
 
 	return 0
 }
-
-// func drawBox(width uint16, height uint16, words [][]string) {
-// 	xOffset := "     "
-
-// 	// draw top border
-// 	fmt.Print(xOffset)
-// 	fmt.Print(Grey + TopLCorner + Reset)
-// 	var i uint16
-// 	for i = 0; i < width; i++ {
-// 		fmt.Print(Grey + Horizontal + Reset)
-// 		if i+1 == width {
-// 			fmt.Println(Grey + TopRCorner + Reset)
-// 		}
-// 	}
-
-// 	// draw side borders and words
-// 	for i = 0; i < height; i++ {
-// 		fmt.Print(xOffset)
-// 		fmt.Print(Grey + Vertical + Reset)
-// 		var totalFormatedWidth uint16 = width
-
-// 		firstWords := words[i]
-// 		for _, word := range firstWords {
-// 			wordLen := uint16(len(word))
-// 			if wordLen >= 50 {
-// 				panic(fmt.Sprintf(`"%s" is bigger than the specified box width.`, word))
-// 			}
-
-// 			if i == 3 { // row containing filename
-// 				fmt.Printf(" Filename: %s%s %s%s(Unsaved)%s", Green, word, Italic, Cyan, Reset)
-// 				wordLen += 21
-// 			} else {
-// 				fmt.Print(word)
-// 			}
-// 			totalFormatedWidth -= wordLen
-// 		}
-
-// 		formatted := fmt.Sprintf("%%%ds", totalFormatedWidth)
-// 		fmt.Printf("%s%s\n", fmt.Sprintf(formatted, " "), Grey+Vertical+Reset)
-// 	}
-
-// 	// draw bottom border
-// 	fmt.Print(xOffset)
-// 	fmt.Print(Grey + BotLCorner + Reset)
-// 	for i = 0; i < width; i++ {
-// 		fmt.Print(Grey + Horizontal + Reset)
-// 		if i+1 == width {
-// 			fmt.Println(Grey + BotRCorner + Reset)
-// 		}
-// 	}
-// }
-
-/*
-	n, _ := os.Stdin.Read(buffer)
-
-	if n == 1 {
-		switch buffer[0] {
-		case 'q':
-			fmt.Print("\x1b[H")
-			fmt.Print("\x1b[2J") //clear the screen
-			return 0
-		case 127: // backspace
-			if editor.CursorX > 0 {
-				currIndex := editor.CursorY + editor.ViewportOffsetY
-				line := editor.Buffer[currIndex]
-				editor.Buffer[currIndex] = line[:editor.CursorX-1] + line[editor.CursorX:]
-				editor.CursorX--
-			} else { // move cursor to end of previous line
-				if editor.CursorY > 0 {
-					currIndex := editor.CursorY + editor.ViewportOffsetY
-
-					// delete row from buffer
-					editor.Buffer = append(editor.Buffer[:currIndex], editor.Buffer[currIndex+1:]...)
-
-					editor.CursorY--
-					editor.CursorX = len(editor.Buffer[editor.CursorY+editor.ViewportOffsetY])
-
-					if editor.ViewportOffsetY > 0 {
-						editor.ViewportOffsetY--
-						editor.CursorY++
-					}
-				}
-			}
-		case 13: // enter
-			editor.Buffer = append(editor.Buffer, "")
-			editor.CursorX = 0
-			if editor.CursorY < editor.MaxTermHeight-1 {
-				editor.CursorY++
-			} else { // cursor extends passed viewport height; move virtul screen up
-				editor.ViewportOffsetY++
-			}
-
-		default:
-			if len(editor.Buffer) == 0 {
-				editor.Buffer = append(editor.Buffer, string(buffer[0]))
-				editor.CursorX++
-			} else {
-				currIndex := editor.CursorY + editor.ViewportOffsetY
-				line := editor.Buffer[currIndex]
-				editor.Buffer[currIndex] = line[:editor.CursorX] + string(buffer[0]) + line[editor.CursorX:]
-				editor.CursorX++
-
-				// word wrap
-				if editor.CursorX >= editor.TermWidth-editor.ViewportOffsetX {
-					editor.Buffer = append(editor.Buffer, "")
-					editor.CursorY++
-					editor.CursorX = 0
-
-					if editor.CursorY >= editor.MaxTermHeight-1 {
-						editor.ViewportOffsetY++
-						editor.CursorY--
-					}
-				}
-			}
-
-		}
-	} else if n == 3 {
-		if buffer[0] == '\x1b' && buffer[1] == '[' {
-			key := buffer[2]
-
-			switch key {
-			case 'A': // up
-			case 'B': // down
-			case 'C': // right
-				editor.CursorX++
-			case 'D': // left
-				editor.CursorX--
-			}
-		}
-
-	}
-*/

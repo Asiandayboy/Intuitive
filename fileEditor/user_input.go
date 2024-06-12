@@ -163,15 +163,15 @@ func HandleKeyboardInput(editor *FileEditor, key byte) byte {
 		}
 
 		if editor.EditorMode == EditorEditMode {
-			editor.actionTyping(key)
+			// editor.actionTyping(key)
 		}
 
 	} else {
 		if editor.EditorMode == EditorEditMode {
 			if key == NewLine {
-				editor.actionNewLine()
+				return editor.actionNewLine()
 			} else if key == Backspace {
-				editor.actionDeleteText(key)
+				editor.actionDeleteText()
 			}
 		}
 	}

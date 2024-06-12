@@ -120,12 +120,12 @@ func main() {
 
 	// render loop
 	go func() {
-		editor.UpdateLoop()
+		editor.RenderLoop()
 	}()
 
 	// input loop
 	for {
-		quit := editor.OnInput()
+		quit := editor.InputLoop()
 		if quit == 1 {
 			break
 		}

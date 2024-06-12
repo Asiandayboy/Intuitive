@@ -1,13 +1,11 @@
 package fileeditor
 
 import (
-	"fmt"
-
 	"github.com/Asiandayboy/CLITextEditor/util/ansi"
 	"github.com/Asiandayboy/CLITextEditor/util/math"
 )
 
-type actionFunc func(key byte)
+type actionFunc func()
 
 var savedCursorX int = 0
 var savedCursorXFlag bool = false
@@ -69,7 +67,7 @@ func (f *FileEditor) SetCursorPosition(m MouseInput) byte {
 	return CursorPositionChange
 }
 
-func (f *FileEditor) actionCursorLeft(key byte) {
+func (f *FileEditor) actionCursorLeft() {
 	if f.apparentCursorX > EditorLeftMargin {
 		f.apparentCursorX--
 	} else {
@@ -83,7 +81,7 @@ func (f *FileEditor) actionCursorLeft(key byte) {
 	setSavedCursorX(f.apparentCursorX, false)
 }
 
-func (f *FileEditor) actionCursorRight(key byte) {
+func (f *FileEditor) actionCursorRight() {
 	line := f.VisualBuffer[f.apparentCursorY-1]
 	if f.apparentCursorX <= len(line)+EditorLeftMargin-1 {
 		f.apparentCursorX++
@@ -97,14 +95,14 @@ func (f *FileEditor) actionCursorRight(key byte) {
 	setSavedCursorX(f.apparentCursorX, false)
 }
 
-func (f *FileEditor) actionCursorUp(key byte) {
+func (f *FileEditor) actionCursorUp() {
 	if f.apparentCursorY > 1 {
 		f.apparentCursorY--
 		verticallyConstrainCursor(f)
 	}
 }
 
-func (f *FileEditor) actionCursorDown(key byte) {
+func (f *FileEditor) actionCursorDown() {
 	if f.apparentCursorY < len(f.VisualBuffer) {
 		f.apparentCursorY++
 		verticallyConstrainCursor(f)
@@ -115,15 +113,16 @@ func (f *FileEditor) actionCursorDown(key byte) {
 /*
 Adds a new line by mutating the FileBuffer
 */
-func (f *FileEditor) actionNewLine() {
+func (f *FileEditor) actionNewLine() byte {
 	// split the current line
 	line := f.FileBuffer[f.bufferLine]
+	n := len(f.FileBuffer)
 
 	beforeSplit := line[:f.bufferIndex]
 	afterSplit := line[f.bufferIndex:]
 
 	// insert the new line (afterSplit) in the middle of buffer array
-	result := make([]string, len(f.FileBuffer)+1)
+	result := make([]string, n+1)
 
 	copy(result, f.FileBuffer[:f.bufferLine])
 
@@ -133,12 +132,72 @@ func (f *FileEditor) actionNewLine() {
 	copy(result[f.bufferLine+2:], f.FileBuffer[f.bufferLine+1:])
 
 	f.FileBuffer = result
+
+	if f.bufferIndex == len(line) { // inserting new line at the end of a line
+		f.RefreshVisualBuffers()
+		f.actionCursorDown()
+		setSavedCursorX(f.apparentCursorX, false)
+		return NewLineInsertedAtLineEnd
+	}
+
+	f.apparentCursorY++
+	f.apparentCursorX = EditorLeftMargin
+	setSavedCursorX(f.apparentCursorX, false)
+
+	return NewLineInserted
 }
 
 func (f *FileEditor) actionTyping(key byte) {
-	fmt.Println("typing:", string(key))
+	if len(f.VisualBuffer[f.apparentCursorY-1]) >= f.TermWidth-EditorLeftMargin {
+		f.apparentCursorY++
+		// f.apparentCursorX = EditorLeftMargin
+	}
+
+	line := f.FileBuffer[f.bufferLine]
+	before := line[:f.bufferIndex]
+	after := line[f.bufferIndex:]
+
+	f.FileBuffer[f.bufferLine] = before + string(key) + after
+	f.apparentCursorX++
+	// if f.apparentCursorX >= f.TermWidth {
+	// 	f.apparentCursorX = EditorLeftMargin
+	// }
+
 }
 
-func (f *FileEditor) actionDeleteText(key byte) {
-	fmt.Println("backspace: delete text")
+func (f *FileEditor) actionDeleteText() {
+	if f.bufferLine <= 0 && f.bufferIndex <= 0 {
+		return
+	}
+
+	setSavedCursorX(f.apparentCursorX, false)
+
+	line := f.FileBuffer[f.bufferLine]
+
+	if len(line) <= 0 { // deleting an empty line
+		f.apparentCursorY--
+		f.apparentCursorX = len(f.VisualBuffer[f.apparentCursorY-1]) + EditorLeftMargin
+		f.FileBuffer = append(f.FileBuffer[:f.bufferLine], f.FileBuffer[f.bufferLine+1:]...)
+		return
+	}
+
+	if f.bufferIndex <= 0 { // deleting at beginning of a line
+		currLine := f.FileBuffer[f.bufferLine]
+
+		f.FileBuffer[f.bufferLine-1] += currLine // append curr line to prev line
+		f.FileBuffer = append(f.FileBuffer[:f.bufferLine], f.FileBuffer[f.bufferLine+1:]...)
+		f.apparentCursorY = math.Clamp(f.apparentCursorY-1, 1, len(f.FileBuffer))
+		f.apparentCursorX = len(f.VisualBuffer[f.apparentCursorY-1]) + EditorLeftMargin
+
+	} else {
+		before := line[:f.bufferIndex-1]
+		after := line[f.bufferIndex:]
+
+		f.FileBuffer[f.bufferLine] = before + after
+		f.apparentCursorX--
+		if f.apparentCursorX < EditorLeftMargin {
+			f.apparentCursorY--
+			f.apparentCursorX = len(f.VisualBuffer[f.apparentCursorY-1]) + EditorLeftMargin
+		}
+	}
 }

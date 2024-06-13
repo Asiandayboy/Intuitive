@@ -1,5 +1,25 @@
 package fileeditor
 
+func (f *FileEditor) GetWordWrappedLines(line string, maxWidth int) (lines []string) {
+	length := len(line)
+
+	for length >= maxWidth {
+		dif := maxWidth - length - 1
+		cutoffIndex := length + dif
+		lines = append(lines, line[:cutoffIndex])
+		line = line[cutoffIndex:]
+		length = len(line)
+	}
+
+	/*
+		when the loop breaks, we need to add the last remaining line,
+		which will be less than maxWidth
+	*/
+	lines = append(lines, line)
+
+	return lines
+}
+
 func (f *FileEditor) RefreshVisualBuffers() {
 	f.VisualBuffer = []string{}
 	f.VisualBufferMapped = []int{}

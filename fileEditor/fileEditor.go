@@ -78,18 +78,17 @@ type FileEditor struct {
 	FileBuffer         []string // contains each line of the actual file
 	VisualBuffer       []string // contains word wrapped lines; this is what gets rendered to the screen
 	VisualBufferMapped []int    // contains the ending index (1-indexed) of word-wrapped lines
-	apparentCursorX    int
-	apparentCursorY    int
-	bufferLine         int // refers to current line of FileBuffer; used when editing FileBuffer
-	bufferIndex        int // refers to current index of current line of FileBuffer; used when editing FileBuffer
-	TermWidth          int
-	TermHeight         int
-	EditorWidth        int // refers to how many characters can fit on a single line
-	MaxTermHeight      int
-	StatusBarHeight    int
+	apparentCursorX    int      // cursor's X position
+	apparentCursorY    int      // cursor's Y position
+	bufferLine         int      // refers to current line of FileBuffer; used when editing FileBuffer
+	bufferIndex        int      // refers to current index of current line of FileBuffer; used when editing FileBuffer
+	TermWidth          int      // width of the terminal window
+	TermHeight         int      // height of the terminal window
+	EditorWidth        int      // refers to how many characters can fit on a single line
+	StatusBarHeight    int      // height of the status bar
 
-	ViewportOffsetX int
-	ViewportOffsetY int
+	ViewportOffsetX int // used for horizontal scrolling
+	ViewportOffsetY int // used for vertical scrolling
 }
 
 func NewFileEditor(filename string) FileEditor {
@@ -106,7 +105,6 @@ func NewFileEditor(filename string) FileEditor {
 		TermWidth:          width,
 		TermHeight:         height,
 		EditorWidth:        width - EditorLeftMargin + 1,
-		MaxTermHeight:      height,
 		StatusBarHeight:    3,
 		Saved:              false,
 		EditorMode:         EditorCommandMode,
@@ -165,26 +163,6 @@ func (f *FileEditor) ReadFileToBuffer() error {
 	f.bufferIndex = 0
 
 	return scanner.Err()
-}
-
-func (f *FileEditor) GetWordWrappedLines(line string, maxWidth int) (lines []string) {
-	length := len(line)
-
-	for length >= maxWidth {
-		dif := maxWidth - length - 1
-		cutoffIndex := length + dif
-		lines = append(lines, line[:cutoffIndex])
-		line = line[cutoffIndex:]
-		length = len(line)
-	}
-
-	/*
-		when the loop breaks, we need to add the last remaining line,
-		which will be less than maxWidth
-	*/
-	lines = append(lines, line)
-
-	return lines
 }
 
 func (f *FileEditor) PrintBuffer() {

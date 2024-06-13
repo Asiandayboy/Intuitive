@@ -15,9 +15,9 @@ func setSavedCursorX(cursorX int, saveFlag bool) {
 	savedCursorX = cursorX
 }
 
-func verticallyConstrainCursor(f *FileEditor) {
+func constrainCursorX(f *FileEditor) {
 	/*
-		Constrain cursor vertically when moving cursor up and down
+		Constrain cursor when moving cursor up and down
 		with keys, keeping the acX clamped from its initial position
 		on the first up or down
 	*/
@@ -38,7 +38,7 @@ func verticallyConstrainCursor(f *FileEditor) {
 	}
 }
 
-func (f *FileEditor) SetCursorPosition(m MouseInput) byte {
+func (f *FileEditor) SetCursorPositionOnClick(m MouseInput) byte {
 	/*
 		constrain cursor horizontally and vertically to not extend
 		past visual buffer
@@ -72,7 +72,7 @@ func (f *FileEditor) actionCursorLeft() {
 		f.apparentCursorX--
 	} else {
 		if f.apparentCursorY > 1 { // move to end of previous line
-			f.apparentCursorY--
+			f.DecrementCursorY()
 			line := f.VisualBuffer[f.apparentCursorY-1]
 			f.apparentCursorX = len(line) + EditorLeftMargin
 		}
@@ -87,7 +87,7 @@ func (f *FileEditor) actionCursorRight() {
 		f.apparentCursorX++
 	} else {
 		if f.apparentCursorY < len(f.VisualBuffer) { // move to start of next line
-			f.apparentCursorY++
+			f.IncrementCursorY()
 			f.apparentCursorX = EditorLeftMargin
 		}
 	}
@@ -97,16 +97,24 @@ func (f *FileEditor) actionCursorRight() {
 
 func (f *FileEditor) actionCursorUp() {
 	if f.apparentCursorY > 1 {
-		f.apparentCursorY--
-		verticallyConstrainCursor(f)
+		f.DecrementCursorY()
+		constrainCursorX(f)
 	}
 }
 
 func (f *FileEditor) actionCursorDown() {
 	if f.apparentCursorY < len(f.VisualBuffer) {
-		f.apparentCursorY++
-		verticallyConstrainCursor(f)
+		f.IncrementCursorY()
+		constrainCursorX(f)
 	}
+
+}
+
+func (f *FileEditor) actionScrollDown() {
+
+}
+
+func (f *FileEditor) actionScrollUp() {
 
 }
 
@@ -114,10 +122,10 @@ func (f *FileEditor) actionCursorDown() {
 Adds a new line by mutating the FileBuffer
 */
 func (f *FileEditor) actionNewLine() byte {
-	// split the current line
 	line := f.FileBuffer[f.bufferLine]
 	n := len(f.FileBuffer)
 
+	// split the current line
 	beforeSplit := line[:f.bufferIndex]
 	afterSplit := line[f.bufferIndex:]
 
@@ -133,6 +141,7 @@ func (f *FileEditor) actionNewLine() byte {
 
 	f.FileBuffer = result
 
+	// update cursor position
 	if f.bufferIndex == len(line) { // inserting new line at the end of a line
 		f.RefreshVisualBuffers()
 		f.actionCursorDown()
@@ -140,7 +149,7 @@ func (f *FileEditor) actionNewLine() byte {
 		return NewLineInsertedAtLineEnd
 	}
 
-	f.apparentCursorY++
+	f.IncrementCursorY()
 	f.apparentCursorX = EditorLeftMargin
 	setSavedCursorX(f.apparentCursorX, false)
 
@@ -157,7 +166,7 @@ func (f *FileEditor) actionTyping(key byte) {
 	f.apparentCursorX++
 	if f.apparentCursorX > f.TermWidth {
 		f.apparentCursorX = EditorLeftMargin + 1
-		f.apparentCursorY++
+		f.IncrementCursorY()
 	}
 
 }
@@ -172,7 +181,7 @@ func (f *FileEditor) actionDeleteText() {
 	line := f.FileBuffer[f.bufferLine]
 
 	if len(line) <= 0 { // deleting an empty line
-		f.apparentCursorY--
+		f.DecrementCursorY()
 		f.apparentCursorX = len(f.VisualBuffer[f.apparentCursorY-1]) + EditorLeftMargin
 		f.FileBuffer = append(f.FileBuffer[:f.bufferLine], f.FileBuffer[f.bufferLine+1:]...)
 		return
@@ -186,7 +195,7 @@ func (f *FileEditor) actionDeleteText() {
 		*/
 		f.FileBuffer[f.bufferLine-1] += currLine
 		f.FileBuffer = append(f.FileBuffer[:f.bufferLine], f.FileBuffer[f.bufferLine+1:]...)
-		f.apparentCursorY = math.Clamp(f.apparentCursorY-1, 1, f.apparentCursorY-1)
+		f.DecrementCursorY()
 		f.apparentCursorX = len(f.VisualBuffer[f.apparentCursorY-1]) + EditorLeftMargin
 
 	} else { // deleting anywhere else
@@ -201,7 +210,7 @@ func (f *FileEditor) actionDeleteText() {
 			we want the conditional above this to handle that
 		*/
 		if f.bufferIndex > 1 && f.apparentCursorX <= EditorLeftMargin {
-			f.apparentCursorY--
+			f.DecrementCursorY()
 			f.apparentCursorX = len(f.VisualBuffer[f.apparentCursorY-1]) + EditorLeftMargin
 		}
 	}

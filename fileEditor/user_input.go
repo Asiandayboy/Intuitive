@@ -118,7 +118,7 @@ var lastMouseInputEvent byte = 100
 func HandleMouseInput(editor *FileEditor, m MouseInput) byte {
 	if m.Event == MouseEventLeftClick && m.Event != lastMouseInputEvent {
 		lastMouseInputEvent = m.Event
-		return editor.SetCursorPosition(m)
+		return editor.SetCursorPositionOnClick(m)
 	}
 
 	if lastMouseInputEvent == m.Event {

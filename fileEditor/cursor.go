@@ -1,5 +1,7 @@
 package fileeditor
 
+import "github.com/Asiandayboy/CLITextEditor/util/math"
+
 /*
 Returns the corresponding index (0-indexed) in the FileBuffer array from the
 apparent cursor's Y position using the mappedBuffer.
@@ -132,4 +134,12 @@ func (e *FileEditor) UpdateBufferIndicies() {
 		e.apparentCursorX-EditorLeftMargin+1, e.apparentCursorY,
 		e.bufferLine, e.VisualBuffer, e.VisualBufferMapped,
 	)
+}
+
+func (f *FileEditor) IncrementCursorY() {
+	f.apparentCursorY = math.Clamp(f.apparentCursorY+1, 1, f.GetViewportHeight())
+}
+
+func (f *FileEditor) DecrementCursorY() {
+	f.apparentCursorY = math.Clamp(f.apparentCursorY-1, 1, f.GetViewportHeight())
 }

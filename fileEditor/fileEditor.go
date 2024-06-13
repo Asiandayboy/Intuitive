@@ -266,7 +266,8 @@ func (f FileEditor) PrintStatusBar() {
 
 	// debugging pu rposes
 	ansi.MoveCursor(yOffset+2, f.TermWidth-50)
-	fmt.Print("l:", f.bufferLine, " i:", f.bufferIndex)
+	fmt.Print("VX:", f.ViewportOffsetX, " VY:", f.ViewportOffsetY)
+	// fmt.Print("l:", f.bufferLine, " i:", f.bufferIndex)
 }
 
 func (f *FileEditor) Render(flag byte) {

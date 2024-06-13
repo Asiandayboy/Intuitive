@@ -148,20 +148,17 @@ func (f *FileEditor) actionNewLine() byte {
 }
 
 func (f *FileEditor) actionTyping(key byte) {
-	if len(f.VisualBuffer[f.apparentCursorY-1]) >= f.TermWidth-EditorLeftMargin {
-		f.apparentCursorY++
-		// f.apparentCursorX = EditorLeftMargin
-	}
-
 	line := f.FileBuffer[f.bufferLine]
+
 	before := line[:f.bufferIndex]
 	after := line[f.bufferIndex:]
 
 	f.FileBuffer[f.bufferLine] = before + string(key) + after
 	f.apparentCursorX++
-	// if f.apparentCursorX >= f.TermWidth {
-	// 	f.apparentCursorX = EditorLeftMargin
-	// }
+	if f.apparentCursorX > f.TermWidth {
+		f.apparentCursorX = EditorLeftMargin + 1
+		f.apparentCursorY++
+	}
 
 }
 

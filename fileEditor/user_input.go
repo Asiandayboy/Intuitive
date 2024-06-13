@@ -163,7 +163,7 @@ func HandleKeyboardInput(editor *FileEditor, key byte) byte {
 		}
 
 		if editor.EditorMode == EditorEditMode {
-			// editor.actionTyping(key)
+			editor.actionTyping(key)
 		}
 
 	} else {

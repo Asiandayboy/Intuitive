@@ -184,18 +184,26 @@ func (f *FileEditor) actionDeleteText() {
 	if f.bufferIndex <= 0 { // deleting at beginning of a line
 		currLine := f.FileBuffer[f.bufferLine]
 
-		f.FileBuffer[f.bufferLine-1] += currLine // append curr line to prev line
+		/*
+			append curr line to prev line, and remove the curr line
+		*/
+		f.FileBuffer[f.bufferLine-1] += currLine
 		f.FileBuffer = append(f.FileBuffer[:f.bufferLine], f.FileBuffer[f.bufferLine+1:]...)
-		f.apparentCursorY = math.Clamp(f.apparentCursorY-1, 1, len(f.FileBuffer))
+		f.apparentCursorY = math.Clamp(f.apparentCursorY-1, 1, f.apparentCursorY-1)
 		f.apparentCursorX = len(f.VisualBuffer[f.apparentCursorY-1]) + EditorLeftMargin
 
-	} else {
+	} else { // deleting anywhere else
 		before := line[:f.bufferIndex-1]
 		after := line[f.bufferIndex:]
 
 		f.FileBuffer[f.bufferLine] = before + after
 		f.apparentCursorX--
-		if f.apparentCursorX < EditorLeftMargin {
+
+		/*
+			f.bufferIndex > 1 to avoid automatically moving to prev line when deleting from index <= 1;
+			we want the conditional above this to handle that
+		*/
+		if f.bufferIndex > 1 && f.apparentCursorX <= EditorLeftMargin {
 			f.apparentCursorY--
 			f.apparentCursorX = len(f.VisualBuffer[f.apparentCursorY-1]) + EditorLeftMargin
 		}

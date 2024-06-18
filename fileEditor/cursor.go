@@ -107,6 +107,7 @@ The returned acX and acY values are 1-indexed, and do not take into account the 
 func CalcNewACXY(
 	newBufMapped []int, bufferLine int,
 	bufferIndex int, newEditorWidth int,
+	viewportOffsetY int,
 ) (newACX int, newACY int) {
 
 	var start int = 0
@@ -129,7 +130,7 @@ func CalcNewACXY(
 		y++
 	}
 
-	newACY = start + y
+	newACY = start + y - viewportOffsetY
 	newACX = bufferIndex % (newEditorWidth - 1)
 
 	if newACX == 0 {

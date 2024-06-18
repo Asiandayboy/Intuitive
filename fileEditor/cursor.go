@@ -11,8 +11,8 @@ Since the mappedBuffer is always sorted, a binary search is the perfect solution
 
 - acX and acY are 1-indexed values
 */
-func CalcBufferLineFromACY(acY int, mappedBuffer []int) int {
-	var target int = acY
+func CalcBufferLineFromACY(acY int, mappedBuffer []int, viewportOffsetY int) int {
+	var target int = acY + viewportOffsetY
 
 	if target < len(mappedBuffer) && mappedBuffer[target-1] == target { // O(1) check
 		return target - 1
@@ -62,7 +62,11 @@ array from the apparent cursor position using the visualBuffer and mappedBuffer
 
 - acX and acY are 1-indexed values
 */
-func CalcBufferIndexFromACXY(acX, acY, bufferLine int, visualBuffer []string, mappedBuffer []int) int {
+func CalcBufferIndexFromACXY(
+	acX, acY, bufferLine int,
+	visualBuffer []string, mappedBuffer []int,
+	viewportOffsetY int,
+) int {
 	var totalLength int = 0
 
 	var start int = 0
@@ -72,8 +76,13 @@ func CalcBufferIndexFromACXY(acX, acY, bufferLine int, visualBuffer []string, ma
 		start = mappedBuffer[bufferLine-1]
 	}
 
+	/*
+		Adds up each full-lengthed lines from the starting line, up to
+		the buffer line, in which case acX is added instead and returns
+		totalLength, which is the index for that line
+	*/
 	for i := start; i < end; i++ {
-		if i == acY-1 {
+		if i == acY-1+viewportOffsetY {
 			totalLength += acX
 			break
 		}
@@ -89,6 +98,8 @@ Returns the new apparent cursor position after a window resize has occurred. The
 values will allow us to dynamically position the cursor so that it stays in the same spot in
 the VisualBuffer instead of fixed on the screen in its previous position. Therefore, when the
 window resizes, the cursor will move accordingly to match the resize.
+
+The returned acX and acY values are 1-indexed, and do not take into account the viewport offsets
 
 - bufferIndex and bufferLine are 0-indexed values
 
@@ -129,10 +140,10 @@ func CalcNewACXY(
 }
 
 func (e *FileEditor) UpdateBufferIndicies() {
-	e.bufferLine = CalcBufferLineFromACY(e.apparentCursorY, e.VisualBufferMapped)
+	e.bufferLine = CalcBufferLineFromACY(e.apparentCursorY, e.VisualBufferMapped, e.ViewportOffsetY)
 	e.bufferIndex = CalcBufferIndexFromACXY(
 		e.apparentCursorX-EditorLeftMargin+1, e.apparentCursorY,
-		e.bufferLine, e.VisualBuffer, e.VisualBufferMapped,
+		e.bufferLine, e.VisualBuffer, e.VisualBufferMapped, e.ViewportOffsetY,
 	)
 }
 

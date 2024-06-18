@@ -75,14 +75,14 @@ Here are all the mouse events:
 const SGR_MOUSE_PREFIX string = "[<"
 
 const (
-	MouseEventLeftClick byte = iota
-	MouseEventWheelClick
-	MouseEventRightClick
-	MouseEventLeftDrag
-	MouseEventWheelDrag
-	MouseEventRightDrag
-	MouseEventScrollUp
-	MouseEventScrollDown
+	MouseEventLeftClick  byte = 0
+	MouseEventWheelClick byte = 1
+	MouseEventRightClick byte = 2
+	MouseEventLeftDrag   byte = 32
+	MouseEventWheelDrag  byte = 33
+	MouseEventRightDrag  byte = 34
+	MouseEventScrollUp   byte = 64
+	MouseEventScrollDown byte = 65
 )
 
 type MouseInput struct {
@@ -116,10 +116,23 @@ func ReadEscSequence(buf []byte, numBytesReadFromBuf int) (bool, MouseInput) {
 var lastMouseInputEvent byte = 100
 
 func HandleMouseInput(editor *FileEditor, m MouseInput) byte {
+	// currently, the scrolling does not maintain cursor position and buffer indicies
+
 	if m.Event == MouseEventLeftClick && m.Event != lastMouseInputEvent {
 		lastMouseInputEvent = m.Event
 		return editor.SetCursorPositionOnClick(m)
 	}
+
+	// else if m.Event == MouseEventScrollDown && m.Event != lastMouseInputEvent {
+	// 	lastMouseInputEvent = m.Event
+	// 	editor.actionScrollDown()
+	// 	return CursorPositionChange
+	// } else if m.Event == MouseEventScrollUp && m.Event != lastMouseInputEvent {
+	// 	lastMouseInputEvent = m.Event
+	// 	editor.actionScrollUp()
+
+	// 	return CursorPositionChange
+	// }
 
 	if lastMouseInputEvent == m.Event {
 		lastMouseInputEvent = 100

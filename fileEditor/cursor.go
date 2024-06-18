@@ -141,11 +141,16 @@ func CalcNewACXY(
 }
 
 func (e *FileEditor) UpdateBufferIndicies() {
-	e.bufferLine = CalcBufferLineFromACY(e.apparentCursorY, e.VisualBufferMapped, e.ViewportOffsetY)
-	e.bufferIndex = CalcBufferIndexFromACXY(
-		e.apparentCursorX-EditorLeftMargin+1, e.apparentCursorY,
-		e.bufferLine, e.VisualBuffer, e.VisualBufferMapped, e.ViewportOffsetY,
-	)
+	if e.SoftWrap {
+		e.bufferLine = CalcBufferLineFromACY(e.apparentCursorY, e.VisualBufferMapped, e.ViewportOffsetY)
+		e.bufferIndex = CalcBufferIndexFromACXY(
+			e.apparentCursorX-EditorLeftMargin+1, e.apparentCursorY,
+			e.bufferLine, e.VisualBuffer, e.VisualBufferMapped, e.ViewportOffsetY,
+		)
+	} else {
+		e.bufferLine = e.apparentCursorY + e.ViewportOffsetY - 1
+		e.bufferIndex = e.apparentCursorX + e.ViewportOffsetX - EditorLeftMargin
+	}
 }
 
 func (f *FileEditor) IncrementCursorY() {

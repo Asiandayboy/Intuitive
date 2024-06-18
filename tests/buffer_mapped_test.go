@@ -8,10 +8,11 @@ import (
 
 func TestCalcBufferLineFromACY(t *testing.T) {
 	tests := []struct {
-		name         string
-		cursorY      int
-		mappedBuffer []int
-		expected     int
+		name            string
+		cursorY         int
+		mappedBuffer    []int
+		expected        int
+		viewportOffsetY int
 	}{
 		{
 			name:         "Test 1",
@@ -85,11 +86,39 @@ func TestCalcBufferLineFromACY(t *testing.T) {
 			mappedBuffer: []int{2, 4, 5, 7, 8, 13, 14},
 			expected:     0,
 		},
+		{
+			name:    "Test 13",
+			cursorY: 28,
+			mappedBuffer: []int{1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+				17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31},
+			expected:        27,
+			viewportOffsetY: 2,
+		},
+		{
+			name:            "Test 14",
+			cursorY:         6,
+			mappedBuffer:    []int{1, 2, 3, 4, 5, 8, 9, 10, 13, 14},
+			expected:        7,
+			viewportOffsetY: 4,
+		},
+		{
+			name:    "Test 15",
+			cursorY: 28,
+			mappedBuffer: []int{1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+				17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31},
+			expected:        25,
+			viewportOffsetY: 0,
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			ret := fileeditor.CalcBufferLineFromACY(tc.cursorY, tc.mappedBuffer)
+			var ret int
+			if tc.viewportOffsetY > 0 {
+				ret = fileeditor.CalcBufferLineFromACY(tc.cursorY, tc.mappedBuffer, tc.viewportOffsetY)
+			} else {
+				ret = fileeditor.CalcBufferLineFromACY(tc.cursorY, tc.mappedBuffer, 0)
+			}
 
 			if ret != tc.expected {
 				t.Fatalf("Expected: %d, got: %d\n", tc.expected, ret)
@@ -100,13 +129,14 @@ func TestCalcBufferLineFromACY(t *testing.T) {
 
 func TestCalcBufferIndexFromACXY(t *testing.T) {
 	tests := []struct {
-		name         string
-		acY          int
-		acX          int
-		bufferLine   int
-		visualBuffer []string
-		mappedBuffer []int
-		expected     int
+		name            string
+		acY             int
+		acX             int
+		bufferLine      int
+		visualBuffer    []string
+		mappedBuffer    []int
+		viewportOffsetY int
+		expected        int
 	}{
 		{
 			name:       "Test 1",
@@ -320,7 +350,14 @@ func TestCalcBufferIndexFromACXY(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			ret := fileeditor.CalcBufferIndexFromACXY(tc.acX, tc.acY, tc.bufferLine, tc.visualBuffer, tc.mappedBuffer)
+			var ret int
+			if tc.viewportOffsetY > 0 {
+				ret = fileeditor.CalcBufferIndexFromACXY(
+					tc.acX, tc.acY, tc.bufferLine, tc.visualBuffer, tc.mappedBuffer, tc.viewportOffsetY)
+			} else {
+				ret = fileeditor.CalcBufferIndexFromACXY(
+					tc.acX, tc.acY, tc.bufferLine, tc.visualBuffer, tc.mappedBuffer, 0)
+			}
 
 			if ret != tc.expected {
 				t.Fatalf("Expected: %d, got: %d\n", tc.expected, ret)
@@ -392,6 +429,15 @@ func TestCalcNewACXY(t *testing.T) {
 			newEditorWidth: 62,
 			expectedX:      1,
 			expectedY:      1,
+		},
+		{
+			name:           "Test 7",
+			newBufMapped:   []int{2, 4, 5, 7, 8, 13, 14, 15, 18, 19, 20, 21, 23, 24, 25, 26, 30, 31, 32},
+			bufferLine:     18,
+			bufferIndex:    30,
+			newEditorWidth: 45,
+			expectedX:      31,
+			expectedY:      32,
 		},
 	}
 

@@ -52,7 +52,7 @@ const (
 
 var modeColors = map[byte]ansi.RGBColor{
 	EditorCommandMode: ansi.NewRGBColor(75, 176, 255), // blue
-	EditorEditMode:    ansi.NewRGBColor(216, 148, 53), // orange
+	EditorEditMode:    ansi.NewRGBColor(228, 37, 132), // orange
 	EditorViewMode:    ansi.NewRGBColor(158, 75, 253), // purple
 }
 
@@ -84,11 +84,13 @@ type FileEditor struct {
 	bufferIndex        int      // refers to current index of current line of FileBuffer; used when editing FileBuffer
 	TermWidth          int      // width of the terminal window
 	TermHeight         int      // height of the terminal window
-	EditorWidth        int      // refers to how many characters can fit on a single line
 	StatusBarHeight    int      // height of the status bar
+	ViewportOffsetX    int      // used for horizontal scrolling
+	ViewportOffsetY    int      // used for vertical scrolling
 
-	ViewportOffsetX int // used for horizontal scrolling
-	ViewportOffsetY int // used for vertical scrolling
+	// Configs
+	SoftWrap        bool
+	PrintEmptyLines bool
 }
 
 func NewFileEditor(filename string) FileEditor {
@@ -104,12 +106,13 @@ func NewFileEditor(filename string) FileEditor {
 		VisualBufferMapped: make([]int, 0),
 		TermWidth:          width,
 		TermHeight:         height,
-		EditorWidth:        width - EditorLeftMargin + 1,
 		StatusBarHeight:    3,
 		Saved:              false,
 		EditorMode:         EditorCommandMode,
 		Keybindings:        NewKeybind(),
 		inputChan:          make(chan byte, 1),
+		SoftWrap:           false,
+		PrintEmptyLines:    false,
 	}
 }
 
@@ -131,15 +134,6 @@ func (f *FileEditor) CloseFile() error {
 	return err
 }
 
-func (f FileEditor) GetBufferCharCount() int {
-	var count int = 0
-	for _, line := range f.FileBuffer {
-		count += len(line)
-	}
-
-	return count
-}
-
 func (f *FileEditor) ReadFileToBuffer() error {
 	scanner := bufio.NewScanner(f.file)
 	var rowCount int = 0
@@ -154,7 +148,11 @@ func (f *FileEditor) ReadFileToBuffer() error {
 	}
 
 	// initalize visual buffers to determine initial cursor position
-	f.RefreshVisualBuffers()
+	if f.SoftWrap {
+		f.RefreshSoftWrapVisualBuffers()
+	} else {
+		f.RefreshNoWrapVisualBuffers()
+	}
 
 	// set cursor's initial position to beginning of file
 	f.apparentCursorX = EditorLeftMargin
@@ -165,61 +163,6 @@ func (f *FileEditor) ReadFileToBuffer() error {
 	return scanner.Err()
 }
 
-func (f *FileEditor) PrintBuffer() {
-	lineNumColor := ansi.NewRGBColor(80, 80, 80).ToFgColorANSI()
-	borderColor := ansi.NewRGBColor(60, 60, 60).ToFgColorANSI()
-	wrappedColor := ansi.NewRGBColor(60, 60, 60).ToFgColorANSI()
-	currRowColor := modeColors[f.EditorMode].ToFgColorANSI()
-
-	/*
-		The status bar height is subtracted from the terminal height to avoid the unnecessary scrolling,
-		which would truncate the beginning of the buffer; And it also refers to the height
-		that the status bar will takeup. The maxHeight value will also be decreased the more
-		word-wrapped lines there are.
-	*/
-	var maxHeight int = f.TermHeight - f.StatusBarHeight
-
-	ansi.MoveCursor(0, 0)
-
-	var lastIdx int = -1
-	for i, line := range f.VisualBuffer {
-		ansi.EraseEntireLine()
-
-		currIdx := CalcBufferLineFromACY(i+1, f.VisualBufferMapped)
-		if lastIdx == currIdx {
-			if f.bufferLine == currIdx {
-				fmt.Printf("%s   %s", lineNumColor, currRowColor)
-			} else {
-				fmt.Printf("%s   %s", lineNumColor, wrappedColor)
-			}
-
-			nextIdx := CalcBufferLineFromACY(i+2, f.VisualBufferMapped)
-
-			if currIdx != nextIdx || i+1 == f.VisualBufferMapped[len(f.VisualBufferMapped)-1] {
-				fmt.Printf("%s %s%s%s %s\n", BotLCorner, borderColor, Vertical, Reset, line)
-			} else {
-				fmt.Printf("%s %s%s%s %s\n", Vertical, borderColor, Vertical, Reset, line)
-			}
-
-		} else {
-			if f.bufferLine == currIdx {
-				fmt.Printf("%s%s%4d %s%s%s %s\n", lineNumColor, currRowColor, currIdx+1, borderColor, Vertical, Reset, line)
-			} else {
-				fmt.Printf("%s%4d %s%s%s %s\n", lineNumColor, currIdx+1, borderColor, Vertical, Reset, line)
-			}
-		}
-
-		maxHeight--
-		lastIdx = currIdx
-	}
-
-	// print the remaining empty spaces
-	for range maxHeight {
-		ansi.EraseEntireLine()
-		fmt.Printf("%s   ~ %s%s%s\n", lineNumColor, borderColor, Vertical, Reset)
-	}
-}
-
 func (f FileEditor) PrintStatusBar() {
 	width := f.TermWidth - EditorLeftMargin + 3
 	height := f.StatusBarHeight
@@ -228,16 +171,6 @@ func (f FileEditor) PrintStatusBar() {
 	yOffset := f.TermHeight - height
 
 	borderColor := ansi.NewRGBColor(60, 60, 60)
-
-	// draw the editor mode next to status bar
-	render.DrawBox(render.Box{
-		Width: 5, Height: height,
-		X: 0, Y: yOffset,
-		BorderColor: borderColor,
-	}, true)
-
-	ansi.MoveCursor(yOffset+2, 2)
-	fmt.Printf(modeColors[f.EditorMode].ToFgColorANSI()+"[%c]"+Reset, f.EditorMode)
 
 	// draw the main part of the status bar
 	render.DrawBox(render.Box{
@@ -254,28 +187,38 @@ func (f FileEditor) PrintStatusBar() {
 		fmt.Print(Green + f.Filename + Reset)
 	}
 
-	// draw cursor position
-	ansi.MoveCursor(yOffset+2, f.TermWidth-25)
-	fmt.Printf(modeColors[f.EditorMode].ToFgColorANSI()+"%d:%d"+Reset, f.apparentCursorY, f.apparentCursorX-EditorLeftMargin+1)
+	// draw buffer indicies position + 1
+	ansi.MoveCursor(yOffset+2, f.TermWidth-8)
+	fmt.Printf(modeColors[f.EditorMode].ToFgColorANSI()+"%d:%d"+Reset, f.bufferLine+1, f.bufferIndex+1)
 
-	// draw word count
-	wordCountColor := ansi.NewRGBColor(120, 120, 120).ToFgColorANSI()
+	// // draw word count
+	// wordCountColor := ansi.NewRGBColor(120, 120, 120).ToFgColorANSI()
+	// ansi.MoveCursor(yOffset+2, f.TermWidth-18)
+	// fmt.Print(wordCountColor+"Char count: ", f.GetBufferCharCount(), Reset)
 
-	ansi.MoveCursor(yOffset+2, f.TermWidth-18)
-	fmt.Print(wordCountColor+"Char count: ", f.GetBufferCharCount(), Reset)
-
-	// debugging pu rposes
+	// debugging purposes
 	ansi.MoveCursor(yOffset+2, f.TermWidth-50)
-	fmt.Print("VX:", f.ViewportOffsetX, " VY:", f.ViewportOffsetY)
-	// fmt.Print("l:", f.bufferLine, " i:", f.bufferIndex)
+	fmt.Print("Soft Wrap: ", f.SoftWrap)
+	// ansi.MoveCursor(yOffset+2, f.TermWidth-65)
+	// fmt.Print("OY:", f.ViewportOffsetY, " OX:", f.ViewportOffsetX)
+
+	// draw the editor mode next to status bar
+	render.DrawBox(render.Box{
+		Width: 5, Height: height,
+		X: 0, Y: yOffset,
+		BorderColor: borderColor,
+	}, true)
+
+	ansi.MoveCursor(yOffset+2, 2)
+	fmt.Printf(modeColors[f.EditorMode].ToFgColorANSI()+"[%c]"+Reset, f.EditorMode)
 }
 
 func (f *FileEditor) Render(flag byte) {
 	ansi.HideCursor()
 
 	// visual buffers are already refreshed when a new line is inserted at the end of a line
-	if flag != NewLineInsertedAtLineEnd {
-		f.RefreshVisualBuffers()
+	if f.SoftWrap && flag != NewLineInsertedAtLineEnd {
+		f.RefreshSoftWrapVisualBuffers()
 	}
 
 	if flag == CursorPositionChange ||
@@ -290,19 +233,20 @@ func (f *FileEditor) Render(flag byte) {
 
 	switch flag {
 	case WindowResize:
-		{
+		if f.SoftWrap {
 			newACX, newACY := CalcNewACXY(
 				f.VisualBufferMapped, f.bufferLine,
-				f.bufferIndex, f.EditorWidth,
+				f.bufferIndex, f.GetViewportWidth(), f.ViewportOffsetY,
 			)
 
 			indexCheck := CalcBufferIndexFromACXY(
 				newACX, newACY,
 				f.bufferLine, f.VisualBuffer, f.VisualBufferMapped,
+				f.ViewportOffsetY,
 			)
 
 			if indexCheck != f.bufferIndex {
-				newACX = f.EditorWidth
+				newACX = f.GetViewportWidth()
 			}
 
 			f.apparentCursorX = newACX + EditorLeftMargin - 1
@@ -338,7 +282,6 @@ updateLoop:
 				ansi.ClearEntireScreen()
 				editor.TermHeight = termH
 				editor.TermWidth = termW
-				editor.EditorWidth = termW - EditorLeftMargin + 1
 				editor.Render(WindowResize)
 			}
 		default:

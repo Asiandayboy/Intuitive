@@ -41,6 +41,8 @@ const (
 	CursorPositionChange
 	NewLineInserted
 	NewLineInsertedAtLineEnd
+	SoftWrapEnabled
+	SoftWrapDisabled
 )
 
 // the three editor modes a user can be in
@@ -219,7 +221,7 @@ func (f *FileEditor) Render(flag byte) {
 	// visual buffers are already refreshed when a new line is inserted at the end of a line
 	if f.SoftWrap && flag != NewLineInsertedAtLineEnd {
 		f.RefreshSoftWrapVisualBuffers()
-	} else if !f.SoftWrap {
+	} else if !f.SoftWrap && flag != NewLineInsertedAtLineEnd {
 		f.RefreshNoWrapVisualBuffers()
 	}
 
@@ -234,7 +236,7 @@ func (f *FileEditor) Render(flag byte) {
 	f.PrintBuffer()
 
 	switch flag {
-	case WindowResize:
+	case WindowResize, SoftWrapEnabled:
 		if f.SoftWrap {
 			newACX, newACY := CalcNewACXY(
 				f.VisualBufferMapped, f.bufferLine,
@@ -253,7 +255,6 @@ func (f *FileEditor) Render(flag byte) {
 
 			f.apparentCursorX = newACX + EditorLeftMargin - 1
 			f.apparentCursorY = newACY
-
 		}
 	}
 
@@ -278,7 +279,7 @@ updateLoop:
 			case Quit:
 				break updateLoop
 			case KeyboardInput, EditorModeChange, CursorPositionChange,
-				NewLineInserted, NewLineInsertedAtLineEnd:
+				NewLineInserted, NewLineInsertedAtLineEnd, SoftWrapDisabled, SoftWrapEnabled:
 				editor.Render(code)
 			case WindowResize:
 				ansi.ClearEntireScreen()
@@ -306,7 +307,7 @@ func (editor *FileEditor) InputLoop() int {
 			ret := HandleMouseInput(editor, mouseEvent)
 
 			switch ret {
-			case CursorPositionChange, WindowResize:
+			case CursorPositionChange, WindowResize, SoftWrapDisabled, SoftWrapEnabled:
 				editor.inputChan <- ret
 			}
 		} else {

@@ -145,6 +145,8 @@ func (f *FileEditor) PrintBuffer() {
 		ansi.EraseEntireLine()
 		if f.PrintEmptyLines {
 			fmt.Printf("%s   ~ %s%s%s\n", lineNumColor, borderColor, Vertical, Reset)
+		} else {
+			ansi.MoveCursorDown(1)
 		}
 	}
 }

@@ -123,6 +123,15 @@ func HandleMouseInput(editor *FileEditor, m MouseInput) byte {
 		return editor.SetCursorPositionOnClick(m)
 	}
 
+	// for now, soft-wrap toggling will use the scroll wheel
+	if m.Event == MouseEventScrollDown {
+		return editor.ToggleSoftWrap(true)
+	}
+
+	if m.Event == MouseEventScrollUp {
+		return editor.ToggleSoftWrap(false)
+	}
+
 	// else if m.Event == MouseEventScrollDown && m.Event != lastMouseInputEvent {
 	// 	lastMouseInputEvent = m.Event
 	// 	editor.actionScrollDown()
@@ -142,7 +151,8 @@ func HandleMouseInput(editor *FileEditor, m MouseInput) byte {
 }
 
 func HandleEscapeInput(editor *FileEditor, buf []byte, n int) byte {
-	if n == 3 && buf[2] == Up || buf[2] == Down || buf[2] == Right || buf[2] == Left {
+	if n == 3 && buf[2] == UpArrowKey || buf[2] == DownArrowKey ||
+		buf[2] == RightArrowKey || buf[2] == LeftArrowKey {
 		editor.Keybindings.MapKeybindToAction(buf[2], true, editor)
 		return CursorPositionChange
 	}

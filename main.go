@@ -95,6 +95,7 @@ func main() {
 
 	editor := fileeditor.NewFileEditor(filename)
 	editor.OpenFile()
+	defer editor.CloseFile()
 	if err := editor.ReadFileToBuffer(); err != nil {
 		fmt.Println(err)
 		return

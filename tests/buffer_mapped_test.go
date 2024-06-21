@@ -368,76 +368,84 @@ func TestCalcBufferIndexFromACXY(t *testing.T) {
 
 func TestCalcNewACXY(t *testing.T) {
 	tests := []struct {
-		name           string
-		newBufMapped   []int
-		bufferLine     int
-		bufferIndex    int
-		newEditorWidth int
-		expectedX      int
-		expectedY      int
+		name            string
+		newBufMapped    []int
+		bufferLine      int
+		bufferIndex     int
+		newEditorWidth  int
+		expectedX       int
+		expectedY       int
+		viewportOffsetY int
 	}{
 		{
-			name:           "Test 1",
-			newBufMapped:   []int{2, 4, 5, 7, 8, 12, 13},
-			bufferLine:     5,
-			bufferIndex:    191,
-			newEditorWidth: 62,
-			expectedX:      9,
-			expectedY:      12,
+			name:            "Test 1",
+			newBufMapped:    []int{2, 4, 5, 7, 8, 12, 13},
+			bufferLine:      5,
+			bufferIndex:     191,
+			newEditorWidth:  62,
+			expectedX:       9,
+			expectedY:       12,
+			viewportOffsetY: 0,
 		},
 		{
-			name:           "Test 2",
-			newBufMapped:   []int{2, 4, 5, 7, 8, 12, 13},
-			bufferLine:     0,
-			bufferIndex:    73,
-			newEditorWidth: 62,
-			expectedX:      13,
-			expectedY:      2,
+			name:            "Test 2",
+			newBufMapped:    []int{2, 4, 5, 7, 8, 12, 13},
+			bufferLine:      0,
+			bufferIndex:     73,
+			newEditorWidth:  62,
+			expectedX:       13,
+			expectedY:       2,
+			viewportOffsetY: 0,
 		},
 		{
-			name:           "Test 3",
-			newBufMapped:   []int{1, 2, 3, 4, 5, 8, 9},
-			bufferLine:     5,
-			bufferIndex:    100,
-			newEditorWidth: 75,
-			expectedX:      27,
-			expectedY:      7,
+			name:            "Test 3",
+			newBufMapped:    []int{1, 2, 3, 4, 5, 8, 9},
+			bufferLine:      5,
+			bufferIndex:     100,
+			newEditorWidth:  75,
+			expectedX:       27,
+			expectedY:       7,
+			viewportOffsetY: 0,
 		},
 		{
-			name:           "Test 4",
-			newBufMapped:   []int{2, 4, 5, 7, 8, 12, 13},
-			bufferLine:     5,
-			bufferIndex:    100,
-			newEditorWidth: 62,
-			expectedX:      40,
-			expectedY:      10,
+			name:            "Test 4",
+			newBufMapped:    []int{2, 4, 5, 7, 8, 12, 13},
+			bufferLine:      5,
+			bufferIndex:     100,
+			newEditorWidth:  62,
+			expectedX:       40,
+			expectedY:       10,
+			viewportOffsetY: 0,
 		},
 		{
-			name:           "Test 5",
-			newBufMapped:   []int{2, 4, 5, 6, 7, 11, 12},
-			bufferLine:     5,
-			bufferIndex:    191,
-			newEditorWidth: 64,
-			expectedX:      3,
-			expectedY:      11,
+			name:            "Test 5",
+			newBufMapped:    []int{2, 4, 5, 6, 7, 11, 12},
+			bufferLine:      5,
+			bufferIndex:     191,
+			newEditorWidth:  64,
+			expectedX:       3,
+			expectedY:       11,
+			viewportOffsetY: 0,
 		},
 		{
-			name:           "Test 6",
-			newBufMapped:   []int{2, 4, 5, 7, 8, 12, 13},
-			bufferLine:     0,
-			bufferIndex:    0,
-			newEditorWidth: 62,
-			expectedX:      1,
-			expectedY:      1,
+			name:            "Test 6",
+			newBufMapped:    []int{2, 4, 5, 7, 8, 12, 13},
+			bufferLine:      0,
+			bufferIndex:     0,
+			newEditorWidth:  62,
+			expectedX:       1,
+			expectedY:       1,
+			viewportOffsetY: 0,
 		},
 		{
-			name:           "Test 7",
-			newBufMapped:   []int{2, 4, 5, 7, 8, 13, 14, 15, 18, 19, 20, 21, 23, 24, 25, 26, 30, 31, 32},
-			bufferLine:     18,
-			bufferIndex:    30,
-			newEditorWidth: 45,
-			expectedX:      31,
-			expectedY:      32,
+			name:            "Test 7",
+			newBufMapped:    []int{2, 4, 5, 7, 8, 13, 14, 15, 18, 19, 20, 21, 23, 24, 25, 26, 30, 31, 32},
+			bufferLine:      18,
+			bufferIndex:     30,
+			newEditorWidth:  45,
+			expectedX:       31,
+			expectedY:       32,
+			viewportOffsetY: 0,
 		},
 	}
 
@@ -446,7 +454,7 @@ func TestCalcNewACXY(t *testing.T) {
 			x, y := fileeditor.CalcNewACXY(
 				tc.newBufMapped,
 				tc.bufferLine, tc.bufferIndex,
-				tc.newEditorWidth,
+				tc.newEditorWidth, tc.viewportOffsetY,
 			)
 
 			if x != tc.expectedX {

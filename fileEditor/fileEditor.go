@@ -304,7 +304,7 @@ func (editor *FileEditor) InputLoop() int {
 			ret := HandleMouseInput(editor, mouseEvent)
 
 			switch ret {
-			case CursorPositionChange:
+			case CursorPositionChange, WindowResize:
 				editor.inputChan <- ret
 			}
 		} else {

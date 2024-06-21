@@ -219,6 +219,8 @@ func (f *FileEditor) Render(flag byte) {
 	// visual buffers are already refreshed when a new line is inserted at the end of a line
 	if f.SoftWrap && flag != NewLineInsertedAtLineEnd {
 		f.RefreshSoftWrapVisualBuffers()
+	} else if !f.SoftWrap {
+		f.RefreshNoWrapVisualBuffers()
 	}
 
 	if flag == CursorPositionChange ||

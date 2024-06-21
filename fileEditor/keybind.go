@@ -39,10 +39,10 @@ const (
 	Escape    byte = 0x1b
 	Backspace byte = 127
 
-	Up    byte = 'A'
-	Down  byte = 'B'
-	Right byte = 'C'
-	Left  byte = 'D'
+	UpArrowKey    byte = 'A'
+	DownArrowKey  byte = 'B'
+	RightArrowKey byte = 'C'
+	LeftArrowKey  byte = 'D'
 )
 
 // Represents the user's keybindings for each action
@@ -63,8 +63,6 @@ type Keybind struct {
 	cursorRight byte
 	cursorUp    byte
 	cursorDown  byte
-	deleteText  byte
-	newLine     byte
 }
 
 /*
@@ -93,7 +91,7 @@ func (k Keybind) MapKeybindToAction(key byte, isArrowKey bool, editor *FileEdito
 
 	action, exists := keybindings[key]
 	if exists {
-		if key == Up || key == Down || key == Right || key == Left {
+		if key == UpArrowKey || key == DownArrowKey || key == RightArrowKey || key == LeftArrowKey {
 			if isArrowKey { // typing arrow keys, which are also A, B, C or D
 				action()
 			}

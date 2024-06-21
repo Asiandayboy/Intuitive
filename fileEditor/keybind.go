@@ -34,6 +34,7 @@ const (
 	CtrlV     byte = 22
 	CtrlX     byte = 24
 	CtrlY     byte = 25
+	Space     byte = 32
 	LBracket  byte = 91
 	RBracket  byte = 93
 	Escape    byte = 0x1b

@@ -3,7 +3,7 @@ package fileeditor
 import "github.com/Asiandayboy/CLITextEditor/util/math"
 
 /*
-Returns the corresponding index (0-indexed) in the FileBuffer array from the
+Returns the soft-wrapped corresponding index (0-indexed) in the FileBuffer array from the
 apparent cursor's Y position using the mappedBuffer.
 Since the mappedBuffer is always sorted, a binary search is the perfect solution
 
@@ -55,7 +55,7 @@ func CalcBufferLineFromACY(acY int, mappedBuffer []int, viewportOffsetY int) int
 }
 
 /*
-Returns the corresponding index (0-indexed) in a particular line in the FileBuffer
+Returns the soft-wrapped corresponding index (0-indexed) in a particular line in the FileBuffer
 array from the apparent cursor position using the visualBuffer and mappedBuffer
 
 - acX and acY must ignore margin spaces
@@ -94,7 +94,7 @@ func CalcBufferIndexFromACXY(
 }
 
 /*
-Returns the new apparent cursor position after a window resize has occurred. The new X and Y
+Returns the new soft-wrapped apparent cursor position after a window resize has occurred. The new X and Y
 values will allow us to dynamically position the cursor so that it stays in the same spot in
 the VisualBuffer instead of fixed on the screen in its previous position. Therefore, when the
 window resizes, the cursor will move accordingly to match the resize.

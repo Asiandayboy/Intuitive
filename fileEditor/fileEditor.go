@@ -45,6 +45,11 @@ const (
 	SoftWrapDisabled
 )
 
+const (
+	IndentWithSpace uint8 = 1
+	IndentWithTab   uint8 = 2
+)
+
 // the three editor modes a user can be in
 const (
 	EditorCommandMode uint8 = 'C'
@@ -89,10 +94,13 @@ type FileEditor struct {
 	StatusBarHeight    int      // height of the status bar
 	ViewportOffsetX    int      // used for horizontal scrolling
 	ViewportOffsetY    int      // used for vertical scrolling
+	TabMap             map[int]map[int]int
 
 	// Configs
 	SoftWrap        bool
-	PrintEmptyLines bool
+	PrintEmptyLines bool  // print tildes for empty lines
+	TabIndentType   uint8 // determines how tabs are stored in the FileBuffer (either as ASCII 9 or ASCII 32)
+	TabSize         uint8
 }
 
 func NewFileEditor(filename string) FileEditor {
@@ -113,8 +121,11 @@ func NewFileEditor(filename string) FileEditor {
 		EditorMode:         EditorCommandMode,
 		Keybindings:        NewKeybind(),
 		inputChan:          make(chan byte, 1),
-		SoftWrap:           false,
-		PrintEmptyLines:    false,
+
+		SoftWrap:        false,
+		PrintEmptyLines: false,
+		TabIndentType:   IndentWithTab,
+		TabSize:         4,
 	}
 }
 

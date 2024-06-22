@@ -20,6 +20,21 @@ func (f FileEditor) GetBufferCharCount() int {
 	return count
 }
 
+func (f FileEditor) RenderTabCharWithSpaces(line string) string {
+	l := ""
+	for _, char := range line {
+		if byte(char) == Tab {
+			for range f.TabSize { // render tab characters as spaces x tabsize
+				l += " "
+			}
+		} else {
+			l += string(char)
+		}
+	}
+
+	return l
+}
+
 func (f *FileEditor) GetWordWrappedLines(line string, maxWidth int) (lines []string) {
 	length := len(line)
 
@@ -49,6 +64,7 @@ func (f *FileEditor) RefreshSoftWrapVisualBuffers() {
 	viewportWidth := f.GetViewportWidth()
 
 	for _, line := range f.FileBuffer {
+		line = f.RenderTabCharWithSpaces(line)
 		if len(line) >= viewportWidth {
 			wordWrappedLines := f.GetWordWrappedLines(line, viewportWidth)
 
@@ -65,9 +81,12 @@ func (f *FileEditor) RefreshSoftWrapVisualBuffers() {
 }
 
 func (f *FileEditor) RefreshNoWrapVisualBuffers() {
-	f.VisualBuffer = make([]string, len(f.FileBuffer))
-	copy(f.VisualBuffer, f.FileBuffer)
 	f.VisualBufferMapped = nil
+	f.VisualBuffer = make([]string, len(f.FileBuffer))
+
+	for i, line := range f.FileBuffer {
+		f.VisualBuffer[i] = f.RenderTabCharWithSpaces(line)
+	}
 }
 
 func (f *FileEditor) PrintBuffer() {

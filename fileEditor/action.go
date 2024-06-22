@@ -266,6 +266,10 @@ func (f *FileEditor) actionTyping(key byte) {
 			f.ViewportOffsetX++
 		}
 	}
+}
+
+func (f *FileEditor) actionInsertTab() {
+	// f.actionTyping(Tab)
 
 }
 
@@ -319,7 +323,10 @@ func (f *FileEditor) actionDeleteText() {
 			f.apparentCursorX = len(prevLine) + EditorLeftMargin
 		} else {
 			if len(prevLine) >= f.GetViewportWidth()-1 {
-				// some margin space added to the offset so the user can see where the lines joined
+				/*
+					some margin space added to the offset for lines with a length greater than
+					the viewport width, so the user can see where the lines joined
+				*/
 				const extraSpace int = 1
 				f.apparentCursorX = math.Clamp(
 					len(prevLine)+EditorLeftMargin-extraSpace,

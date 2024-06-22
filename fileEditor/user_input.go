@@ -195,6 +195,8 @@ func HandleKeyboardInput(editor *FileEditor, key byte) byte {
 				return editor.actionNewLine()
 			} else if key == Backspace {
 				editor.actionDeleteText()
+			} else if key == Tab {
+				editor.actionInsertTab()
 			}
 		}
 	}

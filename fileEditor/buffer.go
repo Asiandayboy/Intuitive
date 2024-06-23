@@ -41,15 +41,18 @@ func (f *FileEditor) RenderTabCharWithSpaces(line string, lineNum int) (l string
 	var tabIntervalCount uint8 = 0
 	for i, char := range line {
 		if byte(char) == Tab {
+			var k int
 			/*
 				If a tab is the first character in the line (at index 0), then we need to make
 				sure it's starting from 1 bc tabIntervalCount is 1-indexed
 			*/
 			if tabIntervalCount <= 0 && i == 0 {
 				tabIntervalCount = 1
+				k = int(tabIntervalCount) - 1
+			} else {
+				k = int(tabIntervalCount)
 			}
 
-			k := int(tabIntervalCount) - 1
 			tabWidth := f.TabSize - (tabIntervalCount % f.TabSize)
 			tabIntervalCount += tabWidth
 

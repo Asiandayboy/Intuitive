@@ -21,6 +21,13 @@ func (f FileEditor) GetBufferCharCount() int {
 }
 
 /*
+Returns the number of spaces the tab character is rendered with
+*/
+func (f FileEditor) GetSpaceWidthOfTabChar(index int) int {
+	return int(f.TabSize) - (index % int(f.TabSize))
+}
+
+/*
 This function replaces every \t character (ASCII 9) in a line of a file
 and replaces it with spaces defined by the tabsize, ensuring that the tab
 is formatted such that a tab occurs at every interval defined by the tabsize.
@@ -38,7 +45,7 @@ func (f *FileEditor) RenderTabCharWithSpaces(line string, lineNum int) (l string
 		While we're doing this, we must also build the tab map as well
 		so that we can use it for when indent is using tabs
 	*/
-	var tabIntervalCount uint8 = 0
+	var tabIntervalCount int = 0
 	for i, char := range line {
 		if byte(char) == Tab {
 			var k int
@@ -53,7 +60,7 @@ func (f *FileEditor) RenderTabCharWithSpaces(line string, lineNum int) (l string
 				k = int(tabIntervalCount)
 			}
 
-			tabWidth := f.TabSize - (tabIntervalCount % f.TabSize)
+			tabWidth := f.GetSpaceWidthOfTabChar(tabIntervalCount)
 			tabIntervalCount += tabWidth
 
 			tabPosArr = append(tabPosArr, int(tabIntervalCount)-1)

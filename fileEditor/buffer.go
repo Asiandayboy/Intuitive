@@ -28,7 +28,8 @@ is formatted such that a tab occurs at every interval defined by the tabsize.
 During the process, an array containing the start and end index of each tab in
 the line is constructed and returned with the new line.
 */
-func (f *FileEditor) RenderTabCharWithSpaces(line string) (l string, tabPosArr []int) {
+func (f *FileEditor) RenderTabCharWithSpaces(line string, lineNum int) (l string) {
+	var tabPosArr []int
 	/*
 		We must keep track of the current tab index we are on to
 		ensure tabs are occuring at the interval defined by tabsize.
@@ -38,12 +39,22 @@ func (f *FileEditor) RenderTabCharWithSpaces(line string) (l string, tabPosArr [
 		so that we can use it for when indent is using tabs
 	*/
 	var tabIntervalCount uint8 = 0
-	for _, char := range line {
+	for i, char := range line {
 		if byte(char) == Tab {
-			tabPosArr = append(tabPosArr, int(tabIntervalCount)-1)
+			/*
+				If a tab is the first character in the line (at index 0), then we need to make
+				sure it's starting from 1 bc tabIntervalCount is 1-indexed
+			*/
+			if tabIntervalCount <= 0 && i == 0 {
+				tabIntervalCount = 1
+			}
+
+			k := int(tabIntervalCount) - 1
 			tabWidth := f.TabSize - (tabIntervalCount % f.TabSize)
 			tabIntervalCount += tabWidth
+
 			tabPosArr = append(tabPosArr, int(tabIntervalCount)-1)
+			tabPosArr = append(tabPosArr, k)
 
 			for range tabWidth { // render tab characters as tabsize x spaces
 				l += " "
@@ -54,7 +65,11 @@ func (f *FileEditor) RenderTabCharWithSpaces(line string) (l string, tabPosArr [
 		}
 	}
 
-	return l, tabPosArr
+	if len(tabPosArr) > 0 {
+		f.TabMap[lineNum] = tabPosArr
+	}
+
+	return l
 }
 
 func (f *FileEditor) GetWordWrappedLines(line string, maxWidth int) (lines []string) {
@@ -87,8 +102,7 @@ func (f *FileEditor) RefreshSoftWrapVisualBuffers() {
 	viewportWidth := f.GetViewportWidth()
 
 	for i, line := range f.FileBuffer {
-		line, tabPosArr := f.RenderTabCharWithSpaces(line)
-		f.TabMap[i] = tabPosArr
+		line = f.RenderTabCharWithSpaces(line, i)
 		if len(line) >= viewportWidth {
 			wordWrappedLines := f.GetWordWrappedLines(line, viewportWidth)
 
@@ -110,9 +124,8 @@ func (f *FileEditor) RefreshNoWrapVisualBuffers() {
 	f.TabMap = make(map[int][]int)
 
 	for i, line := range f.FileBuffer {
-		line, tabPosArr := f.RenderTabCharWithSpaces(line)
+		line = f.RenderTabCharWithSpaces(line, i)
 		f.VisualBuffer[i] = line
-		f.TabMap[i] = tabPosArr
 	}
 }
 

@@ -82,19 +82,19 @@ type FileEditor struct {
 	Filename    string
 	inputChan   chan byte
 
-	FileBuffer         []string // contains each line of the actual file
-	VisualBuffer       []string // contains word wrapped lines; this is what gets rendered to the screen
-	VisualBufferMapped []int    // contains the ending index (1-indexed) of word-wrapped lines
-	apparentCursorX    int      // cursor's X position
-	apparentCursorY    int      // cursor's Y position
-	bufferLine         int      // refers to current line of FileBuffer; used when editing FileBuffer
-	bufferIndex        int      // refers to current index of current line of FileBuffer; used when editing FileBuffer
-	TermWidth          int      // width of the terminal window
-	TermHeight         int      // height of the terminal window
-	StatusBarHeight    int      // height of the status bar
-	ViewportOffsetX    int      // used for horizontal scrolling
-	ViewportOffsetY    int      // used for vertical scrolling
-	TabMap             map[int]map[int]int
+	FileBuffer         []string      // contains each line of the actual file
+	VisualBuffer       []string      // contains word wrapped lines; this is what gets rendered to the screen
+	VisualBufferMapped []int         // contains the ending index (1-indexed) of word-wrapped lines
+	apparentCursorX    int           // cursor's X position
+	apparentCursorY    int           // cursor's Y position
+	bufferLine         int           // refers to current line of FileBuffer; used when editing FileBuffer
+	bufferIndex        int           // refers to current index of current line of FileBuffer; used when editing FileBuffer
+	TermWidth          int           // width of the terminal window
+	TermHeight         int           // height of the terminal window
+	StatusBarHeight    int           // height of the status bar
+	ViewportOffsetX    int           // used for horizontal scrolling
+	ViewportOffsetY    int           // used for vertical scrolling
+	TabMap             map[int][]int // stores the start and end indicies of each tab character; used only when TabIndentType = IndentWithTab
 
 	// Configs
 	SoftWrap        bool
@@ -212,6 +212,8 @@ func (f FileEditor) PrintStatusBar() {
 	// debugging purposes
 	ansi.MoveCursor(yOffset+2, f.TermWidth-50)
 	fmt.Print("Soft Wrap: ", f.SoftWrap)
+	ansi.MoveCursor(yOffset+2, f.TermWidth-30)
+	fmt.Print(Grey+"Tab Size: ", f.TabSize, Reset)
 	// ansi.MoveCursor(yOffset+2, f.TermWidth-65)
 	// fmt.Print("OY:", f.ViewportOffsetY, " OX:", f.ViewportOffsetX)
 

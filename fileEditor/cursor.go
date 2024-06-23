@@ -140,17 +140,50 @@ func CalcNewACXY(
 	return newACX, newACY
 }
 
-func (e *FileEditor) UpdateBufferIndicies() {
-	if e.SoftWrap {
-		e.bufferLine = CalcBufferLineFromACY(e.apparentCursorY, e.VisualBufferMapped, e.ViewportOffsetY)
-		e.bufferIndex = CalcBufferIndexFromACXY(
-			e.apparentCursorX-EditorLeftMargin+1, e.apparentCursorY,
-			e.bufferLine, e.VisualBuffer, e.VisualBufferMapped, e.ViewportOffsetY,
+/*
+	This func updates the buffer indicies based on the cursor's apparent position and
+	the viewport offset using the visual buffer and the visual buffer mapped.
+*/
+func (f *FileEditor) UpdateBufferIndicies() {
+	if f.SoftWrap {
+		f.bufferLine = CalcBufferLineFromACY(f.apparentCursorY, f.VisualBufferMapped, f.ViewportOffsetY)
+		f.bufferIndex = CalcBufferIndexFromACXY(
+			f.apparentCursorX-EditorLeftMargin+1, f.apparentCursorY,
+			f.bufferLine, f.VisualBuffer, f.VisualBufferMapped, f.ViewportOffsetY,
 		)
 	} else {
-		e.bufferLine = e.apparentCursorY + e.ViewportOffsetY - 1
-		e.bufferIndex = e.apparentCursorX + e.ViewportOffsetX - EditorLeftMargin
+		f.bufferLine = f.apparentCursorY + f.ViewportOffsetY - 1
+		f.bufferIndex = f.apparentCursorX + f.ViewportOffsetX - EditorLeftMargin
 	}
+}
+
+/*
+	This func align the buffer index to match the length of the FileBuffer instead of the visual
+	buffer, which is inflated because of the fact tabs are replaced with spaces, which counts as an
+	individual character and therefore contributes to the increase of the length of each line in
+	the visual buffer corresponding to the line the FileBuffer
+*/
+func (f FileEditor) AlignBufferIndex() (actualBufferIndex int) {
+	indicies, exists := f.TabMap[f.bufferLine]
+	if !exists {
+		return f.bufferIndex
+	}
+
+	actualBufferIndex = f.bufferIndex
+	dif := 0
+	for i, idx := range indicies {
+		if i%2 == 0 {
+			if idx > f.bufferIndex {
+				break
+			}
+			dif = idx
+		} else {
+			dif -= idx
+			actualBufferIndex -= dif
+		}
+	}
+
+	return actualBufferIndex
 }
 
 func (f *FileEditor) IncrementCursorY() {

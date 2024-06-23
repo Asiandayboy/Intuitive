@@ -21,7 +21,8 @@ func (f FileEditor) GetBufferCharCount() int {
 }
 
 /*
-Returns the number of spaces the tab character is rendered with
+Returns the number of spaces a tab character is rendered with
+according to its index of the line
 */
 func (f FileEditor) GetSpaceWidthOfTabChar(index int) int {
 	return int(f.TabSize) - (index % int(f.TabSize))
@@ -46,19 +47,9 @@ func (f *FileEditor) RenderTabCharWithSpaces(line string, lineNum int) (l string
 		so that we can use it for when indent is using tabs
 	*/
 	var tabIntervalCount int = 0
-	for i, char := range line {
+	for _, char := range line {
 		if byte(char) == Tab {
-			var k int
-			/*
-				If a tab is the first character in the line (at index 0), then we need to make
-				sure it's starting from 1 bc tabIntervalCount is 1-indexed
-			*/
-			if tabIntervalCount <= 0 && i == 0 {
-				tabIntervalCount = 1
-				k = int(tabIntervalCount) - 1
-			} else {
-				k = int(tabIntervalCount)
-			}
+			k := int(tabIntervalCount)
 
 			tabWidth := f.GetSpaceWidthOfTabChar(tabIntervalCount)
 			tabIntervalCount += tabWidth

@@ -163,24 +163,23 @@ func (f *FileEditor) UpdateBufferIndicies() {
 	individual character and therefore contributes to the increase of the length of each line in
 	the visual buffer corresponding to the line the FileBuffer
 */
-func (f FileEditor) AlignBufferIndex() (actualBufferIndex int) {
-	indicies, exists := f.TabMap[f.bufferLine]
+func AlignBufferIndex(bufferIndex int, bufferLine int, tabMap TabMapType) (actualBufferIndex int) {
+	indicies, exists := tabMap[bufferLine]
 	if !exists {
-		return f.bufferIndex
+		return bufferIndex
 	}
 
-	actualBufferIndex = f.bufferIndex
-	dif := 0
-	for i, idx := range indicies {
-		if i%2 == 0 {
-			if idx > f.bufferIndex {
-				break
-			}
-			dif = idx
-		} else {
-			dif -= idx
-			actualBufferIndex -= dif
+	actualBufferIndex = bufferIndex
+	for _, tabPair := range indicies {
+		end := tabPair[0]
+		start := tabPair[1]
+		dif := end - start
+
+		if end > bufferIndex {
+			break
 		}
+
+		actualBufferIndex -= dif
 	}
 
 	return actualBufferIndex

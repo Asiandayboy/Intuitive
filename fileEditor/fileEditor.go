@@ -82,25 +82,28 @@ type FileEditor struct {
 	Filename    string
 	inputChan   chan byte
 
-	FileBuffer         []string      // contains each line of the actual file
-	VisualBuffer       []string      // contains word wrapped lines; this is what gets rendered to the screen
-	VisualBufferMapped []int         // contains the ending index (1-indexed) of word-wrapped lines
-	apparentCursorX    int           // cursor's X position
-	apparentCursorY    int           // cursor's Y position
-	bufferLine         int           // refers to current line of FileBuffer; used when editing FileBuffer
-	bufferIndex        int           // refers to current index of current line of FileBuffer; used when editing FileBuffer
-	TermWidth          int           // width of the terminal window
-	TermHeight         int           // height of the terminal window
-	StatusBarHeight    int           // height of the status bar
-	ViewportOffsetX    int           // used for horizontal scrolling
-	ViewportOffsetY    int           // used for vertical scrolling
-	TabMap             map[int][]int // stores the start and end indicies of each tab character; used only when TabIndentType = IndentWithTab
+	FileBuffer         []string   // contains each line of the actual file
+	VisualBuffer       []string   // contains word wrapped lines; this is what gets rendered to the screen
+	VisualBufferMapped []int      // contains the ending index (1-indexed) of word-wrapped lines
+	apparentCursorX    int        // cursor's X position
+	apparentCursorY    int        // cursor's Y position
+	bufferLine         int        // refers to current line of FileBuffer; used when editing FileBuffer
+	bufferIndex        int        // refers to current index of current line of FileBuffer; used when editing FileBuffer
+	TermWidth          int        // width of the terminal window
+	TermHeight         int        // height of the terminal window
+	StatusBarHeight    int        // height of the status bar
+	ViewportOffsetX    int        // used for horizontal scrolling
+	ViewportOffsetY    int        // used for vertical scrolling
+	TabMap             TabMapType // stores the start and end indicies of each tab character; used only when TabIndentType = IndentWithTab
 
 	// Configs
 	SoftWrap        bool
 	PrintEmptyLines bool  // print tildes for empty lines
 	TabIndentType   uint8 // determines how tabs are stored in the FileBuffer (either as ASCII 9 or ASCII 32)
 	TabSize         uint8
+
+	// debugging
+	actualBufferIndex int
 }
 
 func NewFileEditor(filename string) FileEditor {
@@ -202,7 +205,7 @@ func (f FileEditor) PrintStatusBar() {
 
 	// draw buffer indicies position + 1
 	ansi.MoveCursor(yOffset+2, f.TermWidth-8)
-	fmt.Printf(modeColors[f.EditorMode].ToFgColorANSI()+"%d:%d"+Reset, f.bufferLine+1, f.bufferIndex+1)
+	fmt.Printf(modeColors[f.EditorMode].ToFgColorANSI()+"%d:%d"+Reset, f.bufferLine, f.bufferIndex)
 
 	// // draw word count
 	// wordCountColor := ansi.NewRGBColor(120, 120, 120).ToFgColorANSI()
@@ -213,7 +216,8 @@ func (f FileEditor) PrintStatusBar() {
 	ansi.MoveCursor(yOffset+2, f.TermWidth-50)
 	fmt.Print("Soft Wrap: ", f.SoftWrap)
 	ansi.MoveCursor(yOffset+2, f.TermWidth-30)
-	fmt.Print(Grey+"Tab Size: ", f.TabSize, Reset)
+	fmt.Print(Grey+"abi: ", f.actualBufferIndex, Reset)
+	// fmt.Print(Grey+"Tab Size: ", f.TabSize, Reset)
 	// ansi.MoveCursor(yOffset+2, f.TermWidth-65)
 	// fmt.Print("OY:", f.ViewportOffsetY, " OX:", f.ViewportOffsetX)
 
@@ -272,6 +276,9 @@ func (f *FileEditor) Render(flag byte) {
 	}
 
 	f.PrintStatusBar()
+
+	ansi.MoveCursor(EditorLeftMargin, 10)
+	fmt.Print(f.TabMap)
 
 	ansi.MoveCursor(f.apparentCursorY, f.apparentCursorX)
 	ansi.ShowCursor()

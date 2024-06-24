@@ -7,6 +7,8 @@ import (
 	"github.com/Asiandayboy/CLITextEditor/util/math"
 )
 
+type TabMapType map[int]map[int][]int
+
 var lineNumColor string = ansi.NewRGBColor(80, 80, 80).ToFgColorANSI()
 var borderColor string = ansi.NewRGBColor(60, 60, 60).ToFgColorANSI()
 var wrappedColor string = ansi.NewRGBColor(60, 60, 60).ToFgColorANSI()
@@ -37,7 +39,7 @@ During the process, an array containing the start and end index of each tab in
 the line is constructed and returned with the new line.
 */
 func (f *FileEditor) RenderTabCharWithSpaces(line string, lineNum int) (l string) {
-	var tabPosArr []int
+	lineTabMap := make(map[int][]int)
 	/*
 		We must keep track of the current tab index we are on to
 		ensure tabs are occuring at the interval defined by tabsize.
@@ -47,15 +49,18 @@ func (f *FileEditor) RenderTabCharWithSpaces(line string, lineNum int) (l string
 		so that we can use it for when indent is using tabs
 	*/
 	var tabIntervalCount int = 0
-	for _, char := range line {
+	for i, char := range line {
 		if byte(char) == Tab {
+			var arr []int
 			k := int(tabIntervalCount)
 
 			tabWidth := f.GetSpaceWidthOfTabChar(tabIntervalCount)
 			tabIntervalCount += tabWidth
 
-			tabPosArr = append(tabPosArr, int(tabIntervalCount)-1)
-			tabPosArr = append(tabPosArr, k)
+			arr = append(arr, int(tabIntervalCount)-1) // end
+			arr = append(arr, k)                       // start
+
+			lineTabMap[i] = arr
 
 			for range tabWidth { // render tab characters as tabsize x spaces
 				l += " "
@@ -66,8 +71,8 @@ func (f *FileEditor) RenderTabCharWithSpaces(line string, lineNum int) (l string
 		}
 	}
 
-	if len(tabPosArr) > 0 {
-		f.TabMap[lineNum] = tabPosArr
+	if len(lineTabMap) > 0 {
+		f.TabMap[lineNum] = lineTabMap
 	}
 
 	return l
@@ -96,7 +101,7 @@ func (f *FileEditor) GetWordWrappedLines(line string, maxWidth int) (lines []str
 func (f *FileEditor) RefreshSoftWrapVisualBuffers() {
 	f.VisualBuffer = []string{}
 	f.VisualBufferMapped = []int{}
-	f.TabMap = make(map[int][]int)
+	f.TabMap = make(TabMapType)
 
 	var end int = 1
 
@@ -122,7 +127,7 @@ func (f *FileEditor) RefreshSoftWrapVisualBuffers() {
 func (f *FileEditor) RefreshNoWrapVisualBuffers() {
 	f.VisualBufferMapped = nil
 	f.VisualBuffer = make([]string, len(f.FileBuffer))
-	f.TabMap = make(map[int][]int)
+	f.TabMap = make(TabMapType)
 
 	for i, line := range f.FileBuffer {
 		line = f.RenderTabCharWithSpaces(line, i)

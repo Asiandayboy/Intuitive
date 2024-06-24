@@ -170,9 +170,9 @@ func AlignBufferIndex(bufferIndex int, bufferLine int, tabMap TabMapType) (actua
 	}
 
 	actualBufferIndex = bufferIndex
-	for _, tabPair := range indicies {
-		end := tabPair[0]
-		start := tabPair[1]
+	for _, tabInfo := range indicies {
+		end := tabInfo.End
+		start := tabInfo.Start
 		dif := end - start
 
 		if end > bufferIndex {

@@ -7,7 +7,65 @@ import (
 	"github.com/Asiandayboy/CLITextEditor/util/math"
 )
 
-type TabMapType map[int]map[int][]int
+type TabInfo struct {
+	BufferIndex int
+	Start       int
+	End         int
+}
+
+func (t TabInfo) TabWidth() int {
+	return t.End - t.Start + 1
+}
+
+const TabInfoErrMsg string = "A tab character does not exist at the visual index"
+
+type TabInfoErr struct {
+	msg string
+}
+
+func (t TabInfoErr) Error() string {
+	return t.msg
+}
+
+type TabMapType map[int][]TabInfo
+
+/*
+Returns the TabInfo of the tab that occupies the visual index.
+If a TabInfo cannot be found, an error is returned
+
+If the bufferIdxFlag is set to true, the index will be used to search
+for the TabInfo based on the bufferIndex and not the end and start visual indicies
+*/
+func GetTabInfoByIndex(tabInfoArr []TabInfo, index int, bufferIdxFlag bool) (TabInfo, error) {
+	left := 0
+	right := len(tabInfoArr) - 1
+
+	for left <= right {
+		mid := (left + right) / 2
+
+		tab := tabInfoArr[mid]
+
+		if !bufferIdxFlag {
+			if index > tab.End {
+				left = mid + 1
+			} else if index < tab.Start {
+				right = mid - 1
+			} else {
+				return tab, nil
+			}
+		} else {
+			if index > tab.BufferIndex {
+				left = mid + 1
+			} else if index < tab.BufferIndex {
+				right = mid - 1
+			} else {
+				return tab, nil
+			}
+		}
+	}
+
+	return TabInfo{}, TabInfoErr{msg: TabInfoErrMsg}
+}
 
 var lineNumColor string = ansi.NewRGBColor(80, 80, 80).ToFgColorANSI()
 var borderColor string = ansi.NewRGBColor(60, 60, 60).ToFgColorANSI()
@@ -39,7 +97,7 @@ During the process, an array containing the start and end index of each tab in
 the line is constructed and returned with the new line.
 */
 func (f *FileEditor) RenderTabCharWithSpaces(line string, lineNum int) (l string) {
-	lineTabMap := make(map[int][]int)
+	lineTabArr := make([]TabInfo, 0)
 	/*
 		We must keep track of the current tab index we are on to
 		ensure tabs are occuring at the interval defined by tabsize.
@@ -51,16 +109,20 @@ func (f *FileEditor) RenderTabCharWithSpaces(line string, lineNum int) (l string
 	var tabIntervalCount int = 0
 	for i, char := range line {
 		if byte(char) == Tab {
-			var arr []int
-			k := int(tabIntervalCount)
+			start := int(tabIntervalCount)
 
 			tabWidth := f.GetSpaceWidthOfTabChar(tabIntervalCount)
 			tabIntervalCount += tabWidth
 
-			arr = append(arr, int(tabIntervalCount)-1) // end
-			arr = append(arr, k)                       // start
+			end := int(tabIntervalCount) - 1
 
-			lineTabMap[i] = arr
+			tabInfo := TabInfo{
+				BufferIndex: i,
+				Start:       start,
+				End:         end,
+			}
+
+			lineTabArr = append(lineTabArr, tabInfo)
 
 			for range tabWidth { // render tab characters as tabsize x spaces
 				l += " "
@@ -71,8 +133,8 @@ func (f *FileEditor) RenderTabCharWithSpaces(line string, lineNum int) (l string
 		}
 	}
 
-	if len(lineTabMap) > 0 {
-		f.TabMap[lineNum] = lineTabMap
+	if len(lineTabArr) > 0 {
+		f.TabMap[lineNum] = lineTabArr
 	}
 
 	return l

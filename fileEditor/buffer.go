@@ -82,10 +82,10 @@ func (f FileEditor) GetBufferCharCount() int {
 
 /*
 Returns the number of spaces a tab character is rendered with
-according to its index of the line
+according to its visual index in the line
 */
-func (f FileEditor) GetSpaceWidthOfTabChar(index int) int {
-	return int(f.TabSize) - (index % int(f.TabSize))
+func (f FileEditor) GetSpaceWidthOfTabChar(visualIndex int) int {
+	return int(f.TabSize) - (visualIndex % int(f.TabSize))
 }
 
 /*

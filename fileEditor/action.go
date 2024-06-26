@@ -327,8 +327,10 @@ func (f *FileEditor) actionNewLine() byte {
 func (f *FileEditor) actionTyping(key byte) {
 	line := f.FileBuffer[f.bufferLine]
 
-	before := line[:f.bufferIndex]
-	after := line[f.bufferIndex:]
+	actualBufferIndex := AlignBufferIndex(f.bufferIndex, f.bufferLine, f.TabMap)
+
+	before := line[:actualBufferIndex]
+	after := line[actualBufferIndex:]
 
 	f.FileBuffer[f.bufferLine] = before + string(key) + after
 	f.apparentCursorX++

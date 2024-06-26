@@ -288,9 +288,11 @@ func (f *FileEditor) actionNewLine() byte {
 	line := f.FileBuffer[f.bufferLine]
 	n := len(f.FileBuffer)
 
+	actualBufferIndex := AlignBufferIndex(f.bufferIndex, f.bufferLine, f.TabMap)
+
 	// split the current line
-	beforeSplit := line[:f.bufferIndex]
-	afterSplit := line[f.bufferIndex:]
+	beforeSplit := line[:actualBufferIndex]
+	afterSplit := line[actualBufferIndex:]
 
 	// insert the new line (afterSplit) in the middle of buffer array
 	result := make([]string, n+1)
@@ -305,7 +307,7 @@ func (f *FileEditor) actionNewLine() byte {
 	f.FileBuffer = result
 
 	// update cursor position
-	if f.bufferIndex == len(line) { // inserting new line at the end of a line
+	if actualBufferIndex == len(line) { // inserting new line at the end of a line
 		if f.SoftWrap {
 			f.RefreshSoftWrapVisualBuffers()
 		} else {

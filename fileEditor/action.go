@@ -66,9 +66,76 @@ func constrainCursorX(f *FileEditor, direction uint8) {
 			len(currLine)+EditorLeftMargin,
 		)
 	}
+
+	f.apparentCursorX = f.SnapACXToTabBoundary(currIdx, f.apparentCursorX)
+}
+
+/*
+This function determines if the current ACX is resting within a tab character
+and returns the new ACX that is snapped to either the start of end of the tab character
+*/
+func (f *FileEditor) SnapACXToTabBoundary(currBufferLine int, currACX int) int {
+	tabInfoArr, exists := f.TabMap[currBufferLine]
+	if !exists {
+		return currACX
+	}
+
+	/*
+		we set the flag to false bc the bufferIndex is aligned the the
+		visualBuffer by default, so we're working with the visual index
+	*/
+	bufferIndex := currACX - EditorLeftMargin + f.ViewportOffsetX
+	tabInfo, err := GetTabInfoByIndex(tabInfoArr, bufferIndex, false)
+	if err != nil {
+		return currACX
+	}
+
+	end := tabInfo.End
+	start := tabInfo.Start
+
+	dif1 := math.Abs(end - bufferIndex)
+
+	if dif1 <= 1 {
+		/*
+			if width == 1, and we return end + EditorLeftMargin + 1, then the cursor will ALWAYS
+			clamp to the end of the tab even though the cursor is near the start of the tab.
+			By subtracting 1, we allow it to clamp the start of the tab and let the next index
+			handle making it look like the clamping to the end of the tab (which would be the start
+			of the next tab or the end of the line)
+		*/
+		if tabInfo.TabWidth() == 1 {
+			return end + EditorLeftMargin - f.ViewportOffsetX
+		}
+		return end + EditorLeftMargin + 1 - f.ViewportOffsetX
+	}
+
+	return start + EditorLeftMargin - f.ViewportOffsetX
+}
+
+func (f FileEditor) MoveToTabBoundary(tabInfoArr []TabInfo, currACX int, cursorDirection string) int {
+	if cursorDirection == "left" {
+		bufferIndex := currACX - EditorLeftMargin + f.ViewportOffsetX
+		tabInfo, err := GetTabInfoByIndex(tabInfoArr, bufferIndex, false)
+		if err != nil {
+			return math.Clamp(currACX, EditorLeftMargin, f.TermWidth)
+		}
+
+		tabWidth := tabInfo.TabWidth()
+		return math.Clamp(currACX-tabWidth+1, EditorLeftMargin, f.TermWidth)
+	} else {
+		bufferIndex := currACX - EditorLeftMargin + f.ViewportOffsetX
+		tabInfo, err := GetTabInfoByIndex(tabInfoArr, bufferIndex, false)
+		if err != nil {
+			return math.Clamp(currACX+1, EditorLeftMargin, f.TermWidth)
+		}
+
+		tabWidth := tabInfo.TabWidth()
+		return math.Clamp(currACX+tabWidth, EditorLeftMargin, f.TermWidth)
+	}
 }
 
 func (f *FileEditor) SetCursorPositionOnClick(m MouseInput) byte {
+	ansi.HideCursor()
 	/*
 		constrain cursor horizontally and vertically to not extend
 		past visual buffer
@@ -96,7 +163,8 @@ func (f *FileEditor) SetCursorPositionOnClick(m MouseInput) byte {
 		return CursorPositionChange
 	}
 
-	line := f.VisualBuffer[m.Y-1+f.ViewportOffsetY]
+	currBufferLine := m.Y - 1 + f.ViewportOffsetY
+	line := f.VisualBuffer[currBufferLine]
 	currLineLen := len(line)
 
 	isLineInViewport := len(line[math.Min(f.ViewportOffsetX, currLineLen):]) > 0
@@ -104,6 +172,8 @@ func (f *FileEditor) SetCursorPositionOnClick(m MouseInput) byte {
 		f.ViewportOffsetX = math.Max(currLineLen, 0)
 	}
 	x := math.Clamp(m.X, EditorLeftMargin, currLineLen+EditorLeftMargin-f.ViewportOffsetX)
+
+	x = f.SnapACXToTabBoundary(currBufferLine, x)
 
 	f.apparentCursorX = x
 	f.apparentCursorY = m.Y
@@ -118,18 +188,23 @@ func (f *FileEditor) actionCursorLeft() {
 		if f.apparentCursorX == EditorLeftMargin && f.ViewportOffsetX > 0 {
 			f.ViewportOffsetX--
 		} else {
-			f.apparentCursorX--
+			tabInfoArr, exists := f.TabMap[f.bufferLine]
+			if !exists {
+				f.apparentCursorX--
+			} else {
+				f.apparentCursorX = f.MoveToTabBoundary(tabInfoArr, f.apparentCursorX-1, "left")
+			}
 		}
 	} else {
 		if f.apparentCursorY > 1 { // move to end of previous line
 			f.DecrementCursorY()
 			line := f.VisualBuffer[f.apparentCursorY-1+f.ViewportOffsetY]
 			f.apparentCursorX = len(line) + EditorLeftMargin
-			if len(line) >= f.GetViewportWidth() {
+			if len(line) >= f.GetViewportWidth() { // scroll screen to end of line if line past screen
 				f.ViewportOffsetX = len(line) - f.GetViewportWidth() + 1
 				f.apparentCursorX = f.TermWidth
 			}
-		} else if f.apparentCursorY == 1 && f.ViewportOffsetY > 0 {
+		} else if f.apparentCursorY == 1 && f.ViewportOffsetY > 0 { // begin scrolling up and moving to end of line
 			f.actionScrollUp()
 			line := f.VisualBuffer[f.apparentCursorY-1+f.ViewportOffsetY]
 			f.apparentCursorX = len(line) + EditorLeftMargin
@@ -150,7 +225,12 @@ func (f *FileEditor) actionCursorRight() {
 		if f.apparentCursorX == f.TermWidth {
 			f.ViewportOffsetX++
 		} else {
-			f.apparentCursorX++
+			tabInfoArr, exists := f.TabMap[f.bufferLine]
+			if !exists {
+				f.apparentCursorX++
+			} else {
+				f.apparentCursorX = f.MoveToTabBoundary(tabInfoArr, f.apparentCursorX, "right")
+			}
 		}
 	} else {
 		if f.apparentCursorY+f.ViewportOffsetY < len(f.VisualBuffer) { // move to start of next line
@@ -353,22 +433,49 @@ func (f *FileEditor) actionDeleteText() {
 		}
 
 	} else { // deleting anywhere else
-		before := line[:f.bufferIndex-1]
-		after := line[f.bufferIndex:]
+		actualBufferIndex := AlignBufferIndex(f.bufferIndex, f.bufferLine, f.TabMap)
+		actualBufferIndex = math.Clamp(actualBufferIndex, 0, len(line)-1)
+
+		var tabKeyDelete bool
+		if actualBufferIndex == len(line)-1 {
+			tabKeyDelete = line[actualBufferIndex] == Tab
+			actualBufferIndex++
+		} else {
+			tabKeyDelete = line[actualBufferIndex-1] == Tab
+		}
+
+		before := line[:actualBufferIndex-1]
+		after := line[actualBufferIndex:]
 
 		f.FileBuffer[f.bufferLine] = before + after
 
 		if f.ViewportOffsetX == 0 {
-			f.apparentCursorX--
+			if tabKeyDelete { // move cursor to left according to tabwidth
+				tabInfoArr := f.TabMap[f.bufferLine]
+				tabInfo, _ := GetTabInfoByIndex(tabInfoArr, actualBufferIndex-1, true)
+				tabWidth := tabInfo.TabWidth()
+
+				f.apparentCursorX = math.Max(f.apparentCursorX-tabWidth, EditorLeftMargin)
+			} else {
+				f.apparentCursorX--
+			}
 		} else {
-			f.ViewportOffsetX = math.Max(f.ViewportOffsetX-1, 0)
+			if tabKeyDelete {
+				tabInfoArr := f.TabMap[f.bufferLine]
+				tabInfo, _ := GetTabInfoByIndex(tabInfoArr, actualBufferIndex-1, true)
+				tabWidth := tabInfo.TabWidth()
+
+				f.apparentCursorX = math.Max(f.apparentCursorX-tabWidth, EditorLeftMargin)
+			} else {
+				f.ViewportOffsetX = math.Max(f.ViewportOffsetX-1, 0)
+			}
 		}
 
 		/*
 			f.bufferIndex > 1 to avoid automatically moving to prev line when deleting from index <= 1;
 			we want the conditional above this to handle that
 		*/
-		if f.bufferIndex > 1 && f.apparentCursorX <= EditorLeftMargin {
+		if actualBufferIndex > 1 && f.apparentCursorX <= EditorLeftMargin {
 			f.DecrementCursorY()
 			if f.apparentCursorY == 1 && f.ViewportOffsetY > 0 {
 				f.actionScrollUp()

@@ -383,10 +383,15 @@ func (f *FileEditor) actionInsertTab() {
 
 		f.FileBuffer[f.bufferLine] = before + string(Tab) + after
 
-		tabVisualIndex := CalcBufferIndexFromACXY(
-			f.apparentCursorX-EditorLeftMargin+1, f.apparentCursorY,
-			f.bufferLine, f.VisualBuffer, f.VisualBufferMapped, f.ViewportOffsetY,
-		)
+		var tabVisualIndex int
+		if f.SoftWrap {
+			tabVisualIndex = CalcBufferIndexFromACXY(
+				f.apparentCursorX-EditorLeftMargin+1, f.apparentCursorY,
+				f.bufferLine, f.VisualBuffer, f.VisualBufferMapped, f.ViewportOffsetY,
+			)
+		} else {
+			tabVisualIndex = f.apparentCursorX - EditorLeftMargin + f.ViewportOffsetX
+		}
 		tabWidth := f.GetSpaceWidthOfTabChar(tabVisualIndex)
 
 		f.apparentCursorX += tabWidth
@@ -532,7 +537,12 @@ func (f *FileEditor) actionDeleteText() {
 				tabInfo, _ := GetTabInfoByIndex(tabInfoArr, actualBufferIndex-1, true)
 				tabWidth := tabInfo.TabWidth()
 
-				f.apparentCursorX = math.Max(f.apparentCursorX-tabWidth, EditorLeftMargin)
+				dif := f.ViewportOffsetX - tabWidth
+
+				f.ViewportOffsetX = math.Max(dif, 0)
+				if f.ViewportOffsetX == 0 {
+					f.apparentCursorX -= math.Abs(dif)
+				}
 			} else {
 				f.ViewportOffsetX = math.Max(f.ViewportOffsetX-1, 0)
 			}

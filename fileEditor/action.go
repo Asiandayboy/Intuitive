@@ -67,7 +67,12 @@ func constrainCursorX(f *FileEditor, direction uint8) {
 		)
 	}
 
-	f.apparentCursorX = f.SnapACXToTabBoundary(currIdx, f.apparentCursorX)
+	if !f.SoftWrap {
+		f.apparentCursorX = f.SnapACXToTabBoundary(currIdx, f.apparentCursorX)
+	} else {
+		idx := CalcBufferLineFromACY(f.apparentCursorY, f.VisualBufferMapped, f.ViewportOffsetY)
+		f.apparentCursorX = f.SnapACXToTabBoundary(idx, f.apparentCursorX)
+	}
 }
 
 /*
@@ -173,7 +178,11 @@ func (f *FileEditor) SetCursorPositionOnClick(m MouseInput) byte {
 	}
 	x := math.Clamp(m.X, EditorLeftMargin, currLineLen+EditorLeftMargin-f.ViewportOffsetX)
 
-	x = f.SnapACXToTabBoundary(currBufferLine, x)
+	if !f.SoftWrap {
+		x = f.SnapACXToTabBoundary(currBufferLine, x)
+	} else {
+		x = f.SnapACXToTabBoundary(CalcBufferLineFromACY(m.Y, f.VisualBufferMapped, f.ViewportOffsetY), x)
+	}
 
 	f.apparentCursorX = x
 	f.apparentCursorY = m.Y
@@ -353,7 +362,61 @@ func (f *FileEditor) actionTyping(key byte) {
 }
 
 func (f *FileEditor) actionInsertTab() {
-	// f.actionTyping(Tab)
+	if f.TabIndentType == IndentWithSpace {
+		index := f.apparentCursorX + f.ViewportOffsetX - EditorLeftMargin
+		tabWidth := f.GetSpaceWidthOfTabChar(index)
+		for range tabWidth {
+			f.actionTyping(Space)
+		}
+	} else if f.TabIndentType == IndentWithTab {
+		/*
+			The following lines are taken from actionTyping() with additions to
+			handle inserting tab characters. I didn't want to write them in the same
+			func bc it looked ugly
+		*/
+		line := f.FileBuffer[f.bufferLine]
+
+		actualBufferIndex := AlignBufferIndex(f.bufferIndex, f.bufferLine, f.TabMap)
+
+		before := line[:actualBufferIndex]
+		after := line[actualBufferIndex:]
+
+		f.FileBuffer[f.bufferLine] = before + string(Tab) + after
+
+		tabVisualIndex := CalcBufferIndexFromACXY(
+			f.apparentCursorX-EditorLeftMargin+1, f.apparentCursorY,
+			f.bufferLine, f.VisualBuffer, f.VisualBufferMapped, f.ViewportOffsetY,
+		)
+		tabWidth := f.GetSpaceWidthOfTabChar(tabVisualIndex)
+
+		f.apparentCursorX += tabWidth
+
+		if f.apparentCursorX > f.TermWidth {
+			/*
+				We need to know how much the tab exceeded the terminal width; we'll take that
+				value and add it to the cursor or viewport offset, depending if soft wrap is on or not
+			*/
+			tabDif := f.apparentCursorX - f.TermWidth
+
+			if f.SoftWrap {
+				// BUG WHEN INSERTING TAB WITH SOFT WRAP ON
+				// it seems it's always a difference of 1
+				if tabWidth == 1 {
+					f.apparentCursorX = EditorLeftMargin
+				} else {
+					f.apparentCursorX = EditorLeftMargin + tabDif
+				}
+				f.IncrementCursorY()
+
+				if f.apparentCursorY == f.GetViewportHeight() && f.apparentCursorY+f.ViewportOffsetY <= len(f.VisualBuffer) {
+					f.ViewportOffsetY++ // changing it directly bc the condition in actionScrollDown doesn't apply here, ig
+				}
+			} else {
+				f.apparentCursorX = f.TermWidth
+				f.ViewportOffsetX += tabDif
+			}
+		}
+	}
 
 }
 

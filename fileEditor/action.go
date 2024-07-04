@@ -508,12 +508,12 @@ func (f *FileEditor) actionDeleteText() {
 		actualBufferIndex := AlignBufferIndex(f.bufferIndex, f.bufferLine, f.TabMap)
 		actualBufferIndex = math.Clamp(actualBufferIndex, 0, len(line)-1)
 
-		var tabKeyDelete bool
+		var isDeletingTabKey bool
 		if actualBufferIndex == len(line)-1 {
-			tabKeyDelete = line[actualBufferIndex] == Tab
+			isDeletingTabKey = line[actualBufferIndex] == Tab
 			actualBufferIndex++
 		} else {
-			tabKeyDelete = line[actualBufferIndex-1] == Tab
+			isDeletingTabKey = line[actualBufferIndex-1] == Tab
 		}
 
 		before := line[:actualBufferIndex-1]
@@ -521,18 +521,22 @@ func (f *FileEditor) actionDeleteText() {
 
 		f.FileBuffer[f.bufferLine] = before + after
 
+		var softWrapTabDif int
+
 		if f.ViewportOffsetX == 0 {
-			if tabKeyDelete { // move cursor to left according to tabwidth
+			if isDeletingTabKey { // move cursor to left according to tabwidth
 				tabInfoArr := f.TabMap[f.bufferLine]
 				tabInfo, _ := GetTabInfoByIndex(tabInfoArr, actualBufferIndex-1, true)
 				tabWidth := tabInfo.TabWidth()
 
-				f.apparentCursorX = math.Max(f.apparentCursorX-tabWidth, EditorLeftMargin)
+				softWrapTabDif = f.apparentCursorX - tabWidth
+
+				f.apparentCursorX = math.Max(softWrapTabDif, EditorLeftMargin)
 			} else {
 				f.apparentCursorX--
 			}
 		} else {
-			if tabKeyDelete {
+			if isDeletingTabKey {
 				tabInfoArr := f.TabMap[f.bufferLine]
 				tabInfo, _ := GetTabInfoByIndex(tabInfoArr, actualBufferIndex-1, true)
 				tabWidth := tabInfo.TabWidth()
@@ -549,7 +553,7 @@ func (f *FileEditor) actionDeleteText() {
 		}
 
 		/*
-			f.bufferIndex > 1 to avoid automatically moving to prev line when deleting from index <= 1;
+			actualBufferIndex > 1 to avoid automatically moving to prev line when deleting from index <= 1;
 			we want the conditional above this to handle that
 		*/
 		if actualBufferIndex > 1 && f.apparentCursorX <= EditorLeftMargin {
@@ -557,7 +561,11 @@ func (f *FileEditor) actionDeleteText() {
 			if f.apparentCursorY == 1 && f.ViewportOffsetY > 0 {
 				f.actionScrollUp()
 			}
-			f.apparentCursorX = len(f.VisualBuffer[f.apparentCursorY-1+f.ViewportOffsetY]) + EditorLeftMargin
+			if isDeletingTabKey {
+				f.apparentCursorX = f.TermWidth - (EditorLeftMargin - softWrapTabDif)
+			} else {
+				f.apparentCursorX = len(f.VisualBuffer[f.apparentCursorY-1+f.ViewportOffsetY]) + EditorLeftMargin
+			}
 		}
 	}
 }

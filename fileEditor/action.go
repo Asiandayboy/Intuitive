@@ -117,9 +117,18 @@ func (f *FileEditor) SnapACXToTabBoundary(currBufferLine int, currACX int) int {
 	return start + EditorLeftMargin - f.ViewportOffsetX
 }
 
-func (f FileEditor) MoveToTabBoundary(tabInfoArr []TabInfo, currACX int, cursorDirection string) int {
+func (f *FileEditor) MoveToTabBoundary(tabInfoArr []TabInfo, currACX int, cursorDirection string) int {
+	var bufferIndex int
+	if f.SoftWrap {
+		bufferIndex = CalcBufferIndexFromACXY(
+			currACX-EditorLeftMargin+1, f.apparentCursorY,
+			f.bufferLine, f.VisualBuffer, f.VisualBufferMapped, f.ViewportOffsetY,
+		)
+	} else {
+		bufferIndex = currACX - EditorLeftMargin + f.ViewportOffsetX
+	}
+
 	if cursorDirection == "left" {
-		bufferIndex := currACX - EditorLeftMargin + f.ViewportOffsetX
 		tabInfo, err := GetTabInfoByIndex(tabInfoArr, bufferIndex, false)
 		if err != nil {
 			return math.Clamp(currACX, EditorLeftMargin, f.TermWidth)
@@ -128,7 +137,6 @@ func (f FileEditor) MoveToTabBoundary(tabInfoArr []TabInfo, currACX int, cursorD
 		tabWidth := tabInfo.TabWidth()
 		return math.Clamp(currACX-tabWidth+1, EditorLeftMargin, f.TermWidth)
 	} else {
-		bufferIndex := currACX - EditorLeftMargin + f.ViewportOffsetX
 		tabInfo, err := GetTabInfoByIndex(tabInfoArr, bufferIndex, false)
 		if err != nil {
 			return math.Clamp(currACX+1, EditorLeftMargin, f.TermWidth)

@@ -10,6 +10,7 @@ type actionFunc func()
 const (
 	upDirection   uint8 = 1
 	downDirection uint8 = 2
+	noDirection   uint8 = 3
 )
 
 var savedACX int = 0
@@ -22,14 +23,82 @@ func setSavedCursorX(acX int, xOffset int, saveFlag bool) {
 	savedViewportXOffset = xOffset
 }
 
+/*
+This function determines if the current ACX is resting within a tab character
+and returns the new ACX that is snapped to either the start of end of the tab character
+and returns the TabInfo
+*/
+func (f *FileEditor) SnapACXToTabBoundary(currBufferLine int, currACX int, direction uint8) (int, TabInfo) {
+	tabInfoArr, exists := f.TabMap[currBufferLine]
+	if !exists {
+		return currACX, TabInfo{}
+	}
+
+	var bufferIndex int
+	if f.SoftWrap {
+		var y int = f.apparentCursorY
+		if direction == upDirection {
+			y = f.apparentCursorY + 1
+		} else if direction == downDirection {
+			y = f.apparentCursorY - 1
+		}
+
+		bufferIndex = CalcBufferIndexFromACXY(
+			currACX-EditorLeftMargin+1, y,
+			f.bufferLine, f.VisualBuffer, f.VisualBufferMapped, f.ViewportOffsetY,
+		)
+	} else {
+		bufferIndex = currACX - EditorLeftMargin + f.ViewportOffsetX
+	}
+
+	/*
+		we set the flag to false bc the bufferIndex is aligned the the
+		visualBuffer by default, so we're working with the visual index
+	*/
+	tabInfo, err := GetTabInfoByIndex(tabInfoArr, bufferIndex, false)
+	if err != nil {
+		return currACX, TabInfo{}
+	}
+
+	end := tabInfo.End
+	start := tabInfo.Start
+
+	dif1 := math.Abs(end - bufferIndex)
+
+	var ret int
+
+	if dif1 < 1 {
+		/*
+			if width == 1, and we return end + EditorLeftMargin + 1, then the cursor will ALWAYS
+			clamp to the end of the tab even though the cursor is near the start of the tab.
+			By subtracting 1, we allow it to clamp the start of the tab and let the next index
+			handle making it look like the clamping to the end of the tab (which would be the start
+			of the next tab or the end of the line)
+		*/
+		if tabInfo.TabWidth() == 1 {
+			ret = end + EditorLeftMargin - f.ViewportOffsetX
+		} else {
+			ret = end + EditorLeftMargin + 1 - f.ViewportOffsetX
+		}
+	} else {
+		ret = start + EditorLeftMargin - f.ViewportOffsetX
+	}
+
+	if f.SoftWrap && ret > (f.TermWidth) {
+		return ret % (f.TermWidth - EditorLeftMargin), tabInfo
+	}
+
+	return ret, tabInfo
+}
+
 func constrainCursorX(f *FileEditor, direction uint8) {
 	/*
 		Constrain cursor when moving cursor up and down
 		with keys, keeping the acX clamped from its initial position
 		on the first up or down
 	*/
-	currIdx := f.apparentCursorY - 1 + f.ViewportOffsetY
-	currLine := f.VisualBuffer[currIdx]
+	visualLineIdx := f.apparentCursorY - 1 + f.ViewportOffsetY
+	currLine := f.VisualBuffer[visualLineIdx]
 
 	if !savedCursorXFlag {
 		setSavedCursorX(f.apparentCursorX, f.ViewportOffsetX, true)
@@ -46,12 +115,12 @@ func constrainCursorX(f *FileEditor, direction uint8) {
 			f.ViewportOffsetX = 0
 		} else if !f.SoftWrap {
 			if direction == upDirection {
-				prevLine := f.VisualBuffer[currIdx+1]
+				prevLine := f.VisualBuffer[visualLineIdx+1]
 				if len(currLine) > len(prevLine) {
 					f.ViewportOffsetX = lineLength - f.TermWidth
 				}
-			} else if direction == downDirection && currIdx > 0 {
-				prevLine := f.VisualBuffer[currIdx-1]
+			} else if direction == downDirection && visualLineIdx > 0 {
+				prevLine := f.VisualBuffer[visualLineIdx-1]
 				if len(currLine) > len(prevLine) {
 					f.ViewportOffsetX = lineLength - f.TermWidth
 				}
@@ -68,53 +137,39 @@ func constrainCursorX(f *FileEditor, direction uint8) {
 	}
 
 	if !f.SoftWrap {
-		f.apparentCursorX = f.SnapACXToTabBoundary(currIdx, f.apparentCursorX)
+		f.apparentCursorX, _ = f.SnapACXToTabBoundary(visualLineIdx, f.apparentCursorX, direction)
 	} else {
-		idx := CalcBufferLineFromACY(f.apparentCursorY, f.VisualBufferMapped, f.ViewportOffsetY)
-		f.apparentCursorX = f.SnapACXToTabBoundary(idx, f.apparentCursorX)
-	}
-}
+		bufferLine := CalcBufferLineFromACY(f.apparentCursorY, f.VisualBufferMapped, f.ViewportOffsetY)
 
-/*
-This function determines if the current ACX is resting within a tab character
-and returns the new ACX that is snapped to either the start of end of the tab character
-*/
-func (f *FileEditor) SnapACXToTabBoundary(currBufferLine int, currACX int) int {
-	tabInfoArr, exists := f.TabMap[currBufferLine]
-	if !exists {
-		return currACX
-	}
+		upBufferLine := CalcBufferLineFromACY(f.apparentCursorY+1, f.VisualBufferMapped, f.ViewportOffsetY)
+		downBufferLine := CalcBufferLineFromACY(f.apparentCursorY-1, f.VisualBufferMapped, f.ViewportOffsetY)
 
-	/*
-		we set the flag to false bc the bufferIndex is aligned the the
-		visualBuffer by default, so we're working with the visual index
-	*/
-	bufferIndex := currACX - EditorLeftMargin + f.ViewportOffsetX
-	tabInfo, err := GetTabInfoByIndex(tabInfoArr, bufferIndex, false)
-	if err != nil {
-		return currACX
-	}
+		if (direction == upDirection && bufferLine == upBufferLine) ||
+			(direction == downDirection && bufferLine == downBufferLine) { // moving up/down on the same bufferLine
 
-	end := tabInfo.End
-	start := tabInfo.Start
+			x, tabInfo := f.SnapACXToTabBoundary(bufferLine, f.apparentCursorX, noDirection)
+			empty := TabInfo{}
 
-	dif1 := math.Abs(end - bufferIndex)
+			bufIdx := CalcBufferIndexFromACXY(
+				f.apparentCursorX, f.apparentCursorY,
+				f.bufferLine, f.VisualBuffer, f.VisualBufferMapped, f.ViewportOffsetY,
+			)
 
-	if dif1 <= 1 {
-		/*
-			if width == 1, and we return end + EditorLeftMargin + 1, then the cursor will ALWAYS
-			clamp to the end of the tab even though the cursor is near the start of the tab.
-			By subtracting 1, we allow it to clamp the start of the tab and let the next index
-			handle making it look like the clamping to the end of the tab (which would be the start
-			of the next tab or the end of the line)
-		*/
-		if tabInfo.TabWidth() == 1 {
-			return end + EditorLeftMargin - f.ViewportOffsetX
+			if bufIdx <= f.TermWidth && tabInfo != empty {
+				if f.apparentCursorX-EditorLeftMargin > 1 {
+					if direction == downDirection {
+						f.DecrementCursorY()
+					}
+				} else {
+					f.DecrementCursorY()
+				}
+			}
+
+			f.apparentCursorX = x
+		} else {
+			f.apparentCursorX, _ = f.SnapACXToTabBoundary(bufferLine, f.apparentCursorX, direction)
 		}
-		return end + EditorLeftMargin + 1 - f.ViewportOffsetX
 	}
-
-	return start + EditorLeftMargin - f.ViewportOffsetX
 }
 
 func (f *FileEditor) MoveToTabBoundary(tabInfoArr []TabInfo, currACX int, cursorDirection string) int {
@@ -187,9 +242,9 @@ func (f *FileEditor) SetCursorPositionOnClick(m MouseInput) byte {
 	x := math.Clamp(m.X, EditorLeftMargin, currLineLen+EditorLeftMargin-f.ViewportOffsetX)
 
 	if !f.SoftWrap {
-		x = f.SnapACXToTabBoundary(currBufferLine, x)
+		x, _ = f.SnapACXToTabBoundary(currBufferLine, x, noDirection)
 	} else {
-		x = f.SnapACXToTabBoundary(CalcBufferLineFromACY(m.Y, f.VisualBufferMapped, f.ViewportOffsetY), x)
+		x, _ = f.SnapACXToTabBoundary(CalcBufferLineFromACY(m.Y, f.VisualBufferMapped, f.ViewportOffsetY), x, noDirection)
 	}
 
 	f.apparentCursorX = x
@@ -209,7 +264,25 @@ func (f *FileEditor) actionCursorLeft() {
 			if !exists {
 				f.apparentCursorX--
 			} else {
-				f.apparentCursorX = f.MoveToTabBoundary(tabInfoArr, f.apparentCursorX-1, "left")
+				tabInfo, err := GetTabInfoByIndex(tabInfoArr, f.bufferIndex-1, false)
+				if err != nil {
+					f.apparentCursorX = f.MoveToTabBoundary(tabInfoArr, f.apparentCursorX-1, "left")
+					setSavedCursorX(f.apparentCursorX, f.ViewportOffsetX, false)
+					return
+				}
+
+				tabWidth := tabInfo.TabWidth()
+				softWrapTabDif := f.apparentCursorX - tabWidth
+
+				if softWrapTabDif < EditorLeftMargin { // deleting a tab that started at the end of the prev line
+					f.DecrementCursorY()
+					if f.apparentCursorY == 1 && f.ViewportOffsetY > 0 {
+						f.actionScrollUp()
+					}
+					f.apparentCursorX = f.TermWidth - (EditorLeftMargin - softWrapTabDif)
+				} else {
+					f.apparentCursorX = f.MoveToTabBoundary(tabInfoArr, f.apparentCursorX-1, "left")
+				}
 			}
 		}
 	} else {
@@ -217,7 +290,7 @@ func (f *FileEditor) actionCursorLeft() {
 			f.DecrementCursorY()
 			line := f.VisualBuffer[f.apparentCursorY-1+f.ViewportOffsetY]
 			f.apparentCursorX = len(line) + EditorLeftMargin
-			if len(line) >= f.GetViewportWidth() { // scroll screen to end of line if line past screen
+			if !f.SoftWrap && len(line) >= f.GetViewportWidth() { // scroll screen to end of line if line past screen
 				f.ViewportOffsetX = len(line) - f.GetViewportWidth() + 1
 				f.apparentCursorX = f.TermWidth
 			}
@@ -239,13 +312,40 @@ func (f *FileEditor) actionCursorRight() {
 	line := f.VisualBuffer[f.apparentCursorY-1+f.ViewportOffsetY]
 
 	if f.apparentCursorX+f.ViewportOffsetX <= len(line)+EditorLeftMargin-1 {
-		if f.apparentCursorX == f.TermWidth {
-			f.ViewportOffsetX++
-		} else {
-			tabInfoArr, exists := f.TabMap[f.bufferLine]
-			if !exists {
-				f.apparentCursorX++
+		tabInfoArr, exists := f.TabMap[f.bufferLine]
+		if !exists {
+			f.apparentCursorX++
+			setSavedCursorX(f.apparentCursorX, f.ViewportOffsetX, false)
+			return
+		}
+
+		tabInfo, err := GetTabInfoByIndex(tabInfoArr, f.bufferIndex, false)
+		if err != nil {
+			if f.apparentCursorX == f.TermWidth {
+				f.ViewportOffsetX++
 			} else {
+				f.apparentCursorX = f.MoveToTabBoundary(tabInfoArr, f.apparentCursorX, "right")
+			}
+			setSavedCursorX(f.apparentCursorX, f.ViewportOffsetX, false)
+			return
+		}
+
+		tabWidth := tabInfo.TabWidth()
+		softWrapTabDif := f.apparentCursorX + tabWidth
+
+		if f.apparentCursorX == f.TermWidth {
+			f.ViewportOffsetX += tabWidth
+		} else {
+			if f.SoftWrap && softWrapTabDif > f.TermWidth { // adding a tab that continues to the next line
+				f.IncrementCursorY()
+				if f.apparentCursorY == f.GetViewportHeight() && f.apparentCursorY+f.ViewportOffsetY <= len(f.VisualBuffer) {
+					f.actionScrollDown()
+				}
+				f.apparentCursorX = EditorLeftMargin + (softWrapTabDif - f.TermWidth)
+			} else {
+				if f.apparentCursorX+tabWidth > f.TermWidth {
+					f.ViewportOffsetX += (f.apparentCursorX + tabWidth - f.TermWidth)
+				}
 				f.apparentCursorX = f.MoveToTabBoundary(tabInfoArr, f.apparentCursorX, "right")
 			}
 		}
@@ -430,7 +530,6 @@ func (f *FileEditor) actionInsertTab() {
 			}
 		}
 	}
-
 }
 
 func (f *FileEditor) actionDeleteText() {

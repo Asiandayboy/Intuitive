@@ -12,7 +12,7 @@ Since the mappedBuffer is always sorted, a binary search is the perfect solution
 - acX and acY are 1-indexed values
 */
 func CalcBufferLineFromACY(acY int, mappedBuffer []int, viewportOffsetY int) int {
-	var target int = acY + viewportOffsetY
+	var target int = math.Clamp(1, acY, acY+1) + viewportOffsetY
 
 	if target < len(mappedBuffer) && mappedBuffer[target-1] == target { // O(1) check
 		return target - 1

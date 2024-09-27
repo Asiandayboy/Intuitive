@@ -43,6 +43,7 @@ const (
 	NewLineInsertedAtLineEnd
 	SoftWrapEnabled
 	SoftWrapDisabled
+	EnumToggleCommandBar
 )
 
 const (
@@ -82,6 +83,9 @@ type FileEditor struct {
 	Filename    string
 	inputChan   chan byte
 
+	CommandBarBuffer  string
+	CommandBarCursorX int
+
 	FileBuffer         []string   // contains each line of the actual file
 	VisualBuffer       []string   // contains word wrapped lines; this is what gets rendered to the screen
 	VisualBufferMapped []int      // contains the ending index (1-indexed) of word-wrapped lines
@@ -95,6 +99,7 @@ type FileEditor struct {
 	ViewportOffsetX    int        // used for horizontal scrolling
 	ViewportOffsetY    int        // used for vertical scrolling
 	TabMap             TabMapType // stores the start and end indicies of each tab character; used only when TabIndentType = IndentWithTab
+	CommandBarToggled  bool
 
 	// Configs
 	SoftWrap        bool
@@ -124,8 +129,9 @@ func NewFileEditor(filename string) FileEditor {
 		EditorMode:         EditorCommandMode,
 		Keybindings:        NewKeybind(),
 		inputChan:          make(chan byte, 1),
+		CommandBarToggled:  false,
 
-		SoftWrap:        false,
+		SoftWrap:        true,
 		PrintEmptyLines: false,
 		TabIndentType:   IndentWithTab,
 		TabSize:         4,
@@ -214,9 +220,10 @@ func (f FileEditor) PrintStatusBar() {
 
 	// debugging purposes
 	ansi.MoveCursor(yOffset+2, f.TermWidth-50)
-	fmt.Print("Soft Wrap: ", f.SoftWrap)
+	fmt.Print("EditorWidth: ", f.GetViewportWidth())
 	ansi.MoveCursor(yOffset+2, f.TermWidth-30)
-	fmt.Print(Grey+"abi: ", f.actualBufferIndex, Reset)
+	fmt.Print(Grey+"abi: ", f.GetViewportHeight(), Reset)
+	fmt.Print(Grey+"te: ", f.apparentCursorY, Reset)
 	// fmt.Print(Grey+"Tab Size: ", f.TabSize, Reset)
 	// ansi.MoveCursor(yOffset+2, f.TermWidth-65)
 	// fmt.Print("OY:", f.ViewportOffsetY, " OX:", f.ViewportOffsetX)
@@ -273,15 +280,27 @@ func (f *FileEditor) Render(flag byte) {
 			f.apparentCursorX = newACX + EditorLeftMargin - 1
 			f.apparentCursorY = newACY
 		}
+	case EnumToggleCommandBar:
+		f.ToggleCommandBar(!f.CommandBarToggled)
 	}
 
 	f.PrintStatusBar()
 
-	ansi.MoveCursor(EditorLeftMargin, 10)
-	fmt.Print(f.TabMap)
+	// ansi.MoveCursor(EditorLeftMargin, 10)
+	// fmt.Print(f.FileBuffer)
 
 	ansi.MoveCursor(f.apparentCursorY, f.apparentCursorX)
-	ansi.ShowCursor()
+
+	if f.CommandBarToggled {
+		f.UpdateCommandBarState()
+	}
+
+	// FIXED: 9/25 -> hide cursor when cursorY exceeds viewport height
+	if f.apparentCursorY > f.GetViewportHeight() {
+		ansi.HideCursor()
+	} else {
+		ansi.ShowCursor()
+	}
 }
 
 func (editor *FileEditor) RenderLoop() {
@@ -306,6 +325,8 @@ updateLoop:
 				editor.TermHeight = termH
 				editor.TermWidth = termW
 				editor.Render(WindowResize)
+			case EnumToggleCommandBar:
+				editor.Render(code)
 			}
 		default:
 		}
@@ -323,7 +344,7 @@ func (editor *FileEditor) InputLoop() int {
 	if buf[0] == Escape {
 		isMouseInput, mouseEvent := ReadEscSequence(buf[:], n)
 
-		if isMouseInput {
+		if isMouseInput && !editor.CommandBarToggled {
 			ret := HandleMouseInput(editor, mouseEvent)
 
 			switch ret {

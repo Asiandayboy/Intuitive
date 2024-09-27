@@ -151,6 +151,14 @@ func HandleMouseInput(editor *FileEditor, m MouseInput) byte {
 }
 
 func HandleEscapeInput(editor *FileEditor, buf []byte, n int) byte {
+	if editor.CommandBarToggled {
+		if n == 3 && (buf[2] == RightArrowKey || buf[2] == LeftArrowKey) {
+			editor.commandBarMoveCursor(buf[2])
+		}
+
+		return 0
+	}
+
 	if n == 3 && buf[2] == UpArrowKey || buf[2] == DownArrowKey ||
 		buf[2] == RightArrowKey || buf[2] == LeftArrowKey {
 		editor.Keybindings.MapKeybindToAction(buf[2], true, editor)
@@ -174,19 +182,24 @@ func HandleKeyboardInput(editor *FileEditor, key byte) byte {
 	const asciiLowerDif uint8 = 32
 
 	if ansi.IsAlphaChar(key) {
-		// Transition to View or Edit mode
-		if editor.EditorMode == EditorCommandMode {
-			if key == EditorEditMode || key == EditorEditMode+asciiLowerDif {
-				editor.EditorMode = EditorEditMode
-				return EditorModeChange
-			} else if key == EditorViewMode || key == EditorViewMode+asciiLowerDif {
-				editor.EditorMode = EditorViewMode
-				return EditorModeChange
+		if !editor.CommandBarToggled {
+			// Transition to View or Edit mode
+			if editor.EditorMode == EditorCommandMode {
+				if key == EditorEditMode || key == EditorEditMode+asciiLowerDif {
+					editor.EditorMode = EditorEditMode
+					return EditorModeChange
+				} else if key == EditorViewMode || key == EditorViewMode+asciiLowerDif {
+					editor.EditorMode = EditorViewMode
+					return EditorModeChange
+				}
 			}
-		}
 
-		if editor.EditorMode == EditorEditMode {
-			editor.actionTyping(key)
+			if editor.EditorMode == EditorEditMode {
+				editor.actionTyping(key)
+			}
+
+		} else {
+			editor.commandBarTyping(key)
 		}
 
 	} else {
@@ -198,6 +211,18 @@ func HandleKeyboardInput(editor *FileEditor, key byte) byte {
 			} else if key == Tab {
 				editor.actionInsertTab()
 			}
+		} else if editor.EditorMode == EditorCommandMode {
+			if key == NewLine {
+				return EnumToggleCommandBar
+			}
+
+			if editor.CommandBarToggled {
+				if key == Backspace {
+					editor.commandBarDeleteText()
+				}
+
+			}
+
 		}
 	}
 

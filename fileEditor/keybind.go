@@ -16,29 +16,30 @@ const (
 )
 
 const (
-	CtrlZ     byte = 0
-	CtrlA     byte = 1
-	CtrlB     byte = 2
-	CtrlC     byte = 3
-	CtrlD     byte = 4
-	CtrlE     byte = 5
-	CtrlH     byte = 8
-	Tab       byte = 9
-	CtrlL     byte = 12
-	NewLine   byte = 13
-	CtrlN     byte = 14
-	CtrlO     byte = 15
-	CtrlR     byte = 18
-	CtrlS     byte = 19
-	CtrlT     byte = 20
-	CtrlV     byte = 22
-	CtrlX     byte = 24
-	CtrlY     byte = 25
-	Space     byte = 32
-	LBracket  byte = 91
-	RBracket  byte = 93
-	Escape    byte = 0x1b
-	Backspace byte = 127
+	CtrlZ        byte = 0
+	CtrlA        byte = 1
+	CtrlB        byte = 2
+	CtrlC        byte = 3
+	CtrlD        byte = 4
+	CtrlE        byte = 5
+	CtrlH        byte = 8
+	Tab          byte = 9
+	CtrlL        byte = 12
+	NewLine      byte = 13
+	CtrlN        byte = 14
+	CtrlO        byte = 15
+	CtrlR        byte = 18
+	CtrlS        byte = 19
+	CtrlT        byte = 20
+	CtrlV        byte = 22
+	CtrlX        byte = 24
+	CtrlY        byte = 25
+	Space        byte = 32
+	LBracket     byte = 91
+	RBracket     byte = 93
+	Escape       byte = 0x1b
+	ForwardSlash byte = 47
+	Backspace    byte = 127
 
 	UpArrowKey    byte = 'A'
 	DownArrowKey  byte = 'B'

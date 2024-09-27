@@ -28,6 +28,10 @@ func MoveCursorRight(n int) {
 	fmt.Printf("\x1b[%dC", n)
 }
 
+func MoveCursorLeft(n int) {
+	fmt.Printf("\x1b[%dD", n)
+}
+
 func MoveCursorDown(n int) {
 	fmt.Printf("\x1b[%dB", n)
 }

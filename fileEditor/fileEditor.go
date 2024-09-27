@@ -76,7 +76,7 @@ left margin accounts for the line numbers, and the vertical border
 const EditorLeftMargin int = 8
 
 type FileEditor struct {
-	Saved       bool
+	Saved       bool // refers to whether the file has been saved since the last modification
 	EditorMode  byte
 	Keybindings Keybind
 	file        *os.File
@@ -125,7 +125,7 @@ func NewFileEditor(filename string) FileEditor {
 		TermWidth:          width,
 		TermHeight:         height,
 		StatusBarHeight:    3,
-		Saved:              false,
+		Saved:              true,
 		EditorMode:         EditorCommandMode,
 		Keybindings:        NewKeybind(),
 		inputChan:          make(chan byte, 1),
@@ -136,24 +136,6 @@ func NewFileEditor(filename string) FileEditor {
 		TabIndentType:   IndentWithTab,
 		TabSize:         4,
 	}
-}
-
-/*
-Opens the file or creates a new one if it cannot be found,
-and reads its content into the buffer
-*/
-func (f *FileEditor) OpenFile() {
-	file, err := os.Open(f.Filename)
-	if err != nil {
-		file, _ = os.Create(f.Filename)
-	}
-
-	f.file = file
-}
-
-func (f *FileEditor) CloseFile() error {
-	err := f.file.Close()
-	return err
 }
 
 func (f *FileEditor) ReadFileToBuffer() error {
@@ -203,10 +185,15 @@ func (f FileEditor) PrintStatusBar() {
 
 	// draw file name
 	ansi.MoveCursor(yOffset+2, EditorLeftMargin)
+	var savedText string = " (Saved)"
 	if !f.Saved {
-		fmt.Print(Green + f.Filename + Cyan + Italic + " (Unsaved)" + Reset)
+		savedText = " (Unsaved)"
+	}
+
+	if !f.Saved {
+		fmt.Print(Green + f.Filename + Red + Italic + savedText + Reset)
 	} else {
-		fmt.Print(Green + f.Filename + Reset)
+		fmt.Print(Green + f.Filename + Blue + Italic + savedText + Reset)
 	}
 
 	// draw buffer indicies position + 1
@@ -257,7 +244,11 @@ func (f *FileEditor) Render(flag byte) {
 		f.UpdateBufferIndicies()
 	}
 
-	f.PrintBuffer()
+	if f.EditorMode == EditorEditMode && (flag == KeyboardInput ||
+		flag == NewLineInserted ||
+		flag == NewLineInsertedAtLineEnd) {
+		f.Saved = false
+	}
 
 	switch flag {
 	case WindowResize, SoftWrapEnabled:
@@ -284,10 +275,8 @@ func (f *FileEditor) Render(flag byte) {
 		f.ToggleCommandBar(!f.CommandBarToggled)
 	}
 
+	f.PrintBuffer()
 	f.PrintStatusBar()
-
-	// ansi.MoveCursor(EditorLeftMargin, 10)
-	// fmt.Print(f.FileBuffer)
 
 	ansi.MoveCursor(f.apparentCursorY, f.apparentCursorX)
 

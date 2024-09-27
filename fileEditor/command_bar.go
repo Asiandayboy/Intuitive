@@ -41,10 +41,12 @@ func drawCommandBar(f FileEditor) {
 	}
 }
 
-func executeCommandBarStr(cmdString string) {
+func executeCommandBarStr(f *FileEditor, cmdString string) {
 	switch cmdString {
 	case CMDBAR_SAVE:
+		f.SaveFile()
 	case CMDBAR_SAVE_AS:
+		// not implemented yet
 	default:
 	}
 }
@@ -58,8 +60,8 @@ func (f *FileEditor) ToggleCommandBar(toggled bool) {
 
 	if toggled {
 		drawCommandBar(*f)
-	} else {
-		executeCommandBarStr(f.CommandBarBuffer)
+	} else if len(f.CommandBarBuffer) > 0 {
+		executeCommandBarStr(f, f.CommandBarBuffer)
 	}
 
 	f.CommandBarBuffer = ""

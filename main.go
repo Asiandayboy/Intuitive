@@ -121,11 +121,16 @@ func main() {
 
 	// render loop
 	go func() {
-		editor.RenderLoop()
+		for !editor.QuitProgramFlag {
+			quit := editor.RenderLoop()
+			if quit == 1 {
+				break
+			}
+		}
 	}()
 
 	// input loop
-	for {
+	for !editor.QuitProgramFlag {
 		quit := editor.InputLoop()
 		if quit == 1 {
 			break

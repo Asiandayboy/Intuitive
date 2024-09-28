@@ -162,23 +162,19 @@ func HandleEscapeInput(editor *FileEditor, buf []byte, n int) byte {
 	if n == 3 && buf[2] == UpArrowKey || buf[2] == DownArrowKey ||
 		buf[2] == RightArrowKey || buf[2] == LeftArrowKey {
 		editor.Keybindings.MapKeybindToAction(buf[2], true, editor)
-		return CursorPositionChange
+		return EnumCursorPositionChange
 	}
 
 	// Return to Command mode
 	if n == 1 && buf[0] == Escape {
 		editor.EditorMode = EditorCommandMode
-		return EditorModeChange
+		return EnumEditorModeChange
 	}
 
 	return 0
 }
 
 func HandleKeyboardInput(editor *FileEditor, key byte) byte {
-	if key == 'q' {
-		return Quit
-	}
-
 	const asciiLowerDif uint8 = 32
 
 	if ansi.IsAlphaChar(key) {
@@ -187,10 +183,10 @@ func HandleKeyboardInput(editor *FileEditor, key byte) byte {
 			if editor.EditorMode == EditorCommandMode {
 				if key == EditorEditMode || key == EditorEditMode+asciiLowerDif {
 					editor.EditorMode = EditorEditMode
-					return EditorModeChange
+					return EnumEditorModeChange
 				} else if key == EditorViewMode || key == EditorViewMode+asciiLowerDif {
 					editor.EditorMode = EditorViewMode
-					return EditorModeChange
+					return EnumEditorModeChange
 				}
 			}
 
@@ -213,6 +209,9 @@ func HandleKeyboardInput(editor *FileEditor, key byte) byte {
 			}
 		} else if editor.EditorMode == EditorCommandMode {
 			if key == NewLine {
+				if editor.CommandBarToggled && editor.isCommandBarQuitStr() {
+					return EnumQuit
+				}
 				return EnumToggleCommandBar
 			}
 
@@ -226,6 +225,5 @@ func HandleKeyboardInput(editor *FileEditor, key byte) byte {
 		}
 	}
 
-	// editor.Keybindings.MapKeybindToAction(key, false, *editor)
-	return KeyboardInput
+	return EnumKeyboardInput
 }

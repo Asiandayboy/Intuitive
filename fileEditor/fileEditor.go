@@ -34,15 +34,15 @@ const (
 )
 
 const (
-	Quit byte = iota + 1
-	KeyboardInput
-	WindowResize
-	EditorModeChange
-	CursorPositionChange
-	NewLineInserted
-	NewLineInsertedAtLineEnd
-	SoftWrapEnabled
-	SoftWrapDisabled
+	EnumQuit byte = iota + 1
+	EnumKeyboardInput
+	EnumWindowResize
+	EnumEditorModeChange
+	EnumCursorPositionChange
+	EnumNewLineInserted
+	EnumNewLineInsertedAtLineEnd
+	EnumSoftWrapEnabled
+	EnumSoftWrapDisabled
 	EnumToggleCommandBar
 )
 
@@ -76,12 +76,13 @@ left margin accounts for the line numbers, and the vertical border
 const EditorLeftMargin int = 8
 
 type FileEditor struct {
-	Saved       bool // refers to whether the file has been saved since the last modification
-	EditorMode  byte
-	Keybindings Keybind
-	file        *os.File
-	Filename    string
-	inputChan   chan byte
+	Saved           bool // refers to whether the file has been saved since the last modification
+	EditorMode      byte
+	Keybindings     Keybind
+	file            *os.File
+	Filename        string
+	inputChan       chan byte
+	QuitProgramFlag bool
 
 	CommandBarBuffer  string
 	CommandBarCursorX int
@@ -130,6 +131,7 @@ func NewFileEditor(filename string) FileEditor {
 		Keybindings:        NewKeybind(),
 		inputChan:          make(chan byte, 1),
 		CommandBarToggled:  false,
+		QuitProgramFlag:    false,
 
 		SoftWrap:        true,
 		PrintEmptyLines: false,
@@ -230,28 +232,29 @@ func (f *FileEditor) Render(flag byte) {
 	ansi.HideCursor()
 
 	// visual buffers are already refreshed when a new line is inserted at the end of a line
-	if f.SoftWrap && flag != NewLineInsertedAtLineEnd {
+	if f.SoftWrap && flag != EnumNewLineInsertedAtLineEnd {
 		f.RefreshSoftWrapVisualBuffers()
-	} else if !f.SoftWrap && flag != NewLineInsertedAtLineEnd {
+	} else if !f.SoftWrap && flag != EnumNewLineInsertedAtLineEnd {
 		f.RefreshNoWrapVisualBuffers()
 	}
 
-	if flag == CursorPositionChange ||
-		flag == KeyboardInput ||
-		flag == NewLineInserted ||
-		flag == NewLineInsertedAtLineEnd {
+	if flag == EnumCursorPositionChange ||
+		flag == EnumKeyboardInput ||
+		flag == EnumNewLineInserted ||
+		flag == EnumNewLineInsertedAtLineEnd {
 
 		f.UpdateBufferIndicies()
 	}
 
-	if f.EditorMode == EditorEditMode && (flag == KeyboardInput ||
-		flag == NewLineInserted ||
-		flag == NewLineInsertedAtLineEnd) {
+	if f.EditorMode == EditorEditMode && (flag == EnumKeyboardInput ||
+		flag == EnumNewLineInserted ||
+		flag == EnumNewLineInsertedAtLineEnd) {
+
 		f.Saved = false
 	}
 
 	switch flag {
-	case WindowResize, SoftWrapEnabled:
+	case EnumWindowResize, EnumSoftWrapEnabled:
 		if f.SoftWrap {
 			newACX, newACY := CalcNewACXY(
 				f.VisualBufferMapped, f.bufferLine,
@@ -292,34 +295,31 @@ func (f *FileEditor) Render(flag byte) {
 	}
 }
 
-func (editor *FileEditor) RenderLoop() {
-updateLoop:
-	for {
-		termW, termH, _ := term.GetSize(int(os.Stdout.Fd()))
+func (editor *FileEditor) RenderLoop() int {
+	termW, termH, _ := term.GetSize(int(os.Stdout.Fd()))
 
-		if !(termW == editor.TermWidth && termH == editor.TermHeight) { // resize
-			editor.inputChan <- WindowResize
-		}
-
-		select {
-		case code := <-editor.inputChan:
-			switch code {
-			case Quit:
-				break updateLoop
-			case KeyboardInput, EditorModeChange, CursorPositionChange,
-				NewLineInserted, NewLineInsertedAtLineEnd, SoftWrapDisabled, SoftWrapEnabled:
-				editor.Render(code)
-			case WindowResize:
-				ansi.ClearEntireScreen()
-				editor.TermHeight = termH
-				editor.TermWidth = termW
-				editor.Render(WindowResize)
-			case EnumToggleCommandBar:
-				editor.Render(code)
-			}
-		default:
-		}
+	if !(termW == editor.TermWidth && termH == editor.TermHeight) { // resize
+		editor.inputChan <- EnumWindowResize
 	}
+
+	select {
+	case inputCode := <-editor.inputChan:
+		switch inputCode {
+		case EnumQuit:
+			return 1
+		case EnumKeyboardInput, EnumEditorModeChange, EnumCursorPositionChange, EnumToggleCommandBar,
+			EnumNewLineInserted, EnumNewLineInsertedAtLineEnd, EnumSoftWrapDisabled, EnumSoftWrapEnabled:
+			editor.Render(inputCode)
+		case EnumWindowResize:
+			ansi.ClearEntireScreen()
+			editor.TermHeight = termH
+			editor.TermWidth = termW
+			editor.Render(EnumWindowResize)
+		}
+	default:
+	}
+
+	return 0
 }
 
 func (editor *FileEditor) InputLoop() int {
@@ -330,37 +330,36 @@ func (editor *FileEditor) InputLoop() int {
 		return 1
 	}
 
-	if buf[0] == Escape {
+	if buf[0] == Escape { // mouse input and arrow keys, etc.
 		isMouseInput, mouseEvent := ReadEscSequence(buf[:], n)
 
 		if isMouseInput && !editor.CommandBarToggled {
 			ret := HandleMouseInput(editor, mouseEvent)
 
 			switch ret {
-			case CursorPositionChange, WindowResize, SoftWrapDisabled, SoftWrapEnabled:
+			case EnumCursorPositionChange, EnumWindowResize, EnumSoftWrapDisabled, EnumSoftWrapEnabled:
 				editor.inputChan <- ret
 			}
 		} else {
 			ret := HandleEscapeInput(editor, buf[:], n)
 
 			switch ret {
-			case CursorPositionChange:
-				editor.inputChan <- CursorPositionChange
-			case EditorModeChange:
-				editor.inputChan <- EditorModeChange
+			case EnumCursorPositionChange:
+				editor.inputChan <- EnumCursorPositionChange
+			case EnumEditorModeChange:
+				editor.inputChan <- EnumEditorModeChange
 			}
 		}
 	} else {
 		ret := HandleKeyboardInput(editor, buf[0])
 
 		switch ret {
-		case Quit:
-			editor.inputChan <- Quit
+		case EnumQuit:
+			editor.inputChan <- EnumQuit
 			return 1
 		default:
 			editor.inputChan <- ret
 		}
-
 	}
 
 	return 0

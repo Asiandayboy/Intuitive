@@ -2,13 +2,13 @@ package fileeditor
 
 import (
 	"fmt"
-
 	"github.com/Asiandayboy/CLITextEditor/render"
 	"github.com/Asiandayboy/CLITextEditor/util/ansi"
 )
 
 const CMDBAR_SAVE string = "save"
 const CMDBAR_SAVE_AS string = "save as"
+const CMDBAR_QUIT string = "quit"
 
 const cmdBarWidth int = 35
 const cmdBarHeight int = 3
@@ -42,6 +42,15 @@ func drawCommandBar(f FileEditor) {
 }
 
 func executeCommandBarStr(f *FileEditor, cmdString string) {
+	/*
+		The only command that isn't handled here is the CMDBAR_QUIT
+		command. This is because the quit command needs to be handled
+		immediately when the command bar keybind is pressed in order to
+		send the appropriate signal to stop the input and render loop.
+		If we handled it here, there will be a delay in quitting the program
+		because the quit signal won't be checked until the next loop cycle
+		due to how the command bar is implemented rn. So....yeah
+	*/
 	switch cmdString {
 	case CMDBAR_SAVE:
 		f.SaveFile()
@@ -53,6 +62,10 @@ func executeCommandBarStr(f *FileEditor, cmdString string) {
 
 func (f *FileEditor) UpdateCommandBarState() {
 	drawCommandBar(*f)
+}
+
+func (f FileEditor) isCommandBarQuitStr() bool {
+	return f.CommandBarBuffer == CMDBAR_QUIT
 }
 
 func (f *FileEditor) ToggleCommandBar(toggled bool) {

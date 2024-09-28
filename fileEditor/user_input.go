@@ -123,14 +123,14 @@ func HandleMouseInput(editor *FileEditor, m MouseInput) byte {
 		return editor.SetCursorPositionOnClick(m)
 	}
 
-	// for now, soft-wrap toggling will use the scroll wheel
-	if m.Event == MouseEventScrollDown {
-		return editor.ToggleSoftWrap(true)
-	}
+	// // for now, soft-wrap toggling will use the scroll wheel -> 9/28 moved to the command bar
+	// if m.Event == MouseEventScrollDown {
+	// 	return editor.ToggleSoftWrap(true)
+	// }
 
-	if m.Event == MouseEventScrollUp {
-		return editor.ToggleSoftWrap(false)
-	}
+	// if m.Event == MouseEventScrollUp {
+	// 	return editor.ToggleSoftWrap(false)
+	// }
 
 	// else if m.Event == MouseEventScrollDown && m.Event != lastMouseInputEvent {
 	// 	lastMouseInputEvent = m.Event
@@ -209,8 +209,10 @@ func HandleKeyboardInput(editor *FileEditor, key byte) byte {
 			}
 		} else if editor.EditorMode == EditorCommandMode {
 			if key == NewLine {
-				if editor.CommandBarToggled && editor.isCommandBarQuitStr() {
-					return EnumQuit
+				if editor.CommandBarToggled {
+					if editor.isCommandBarQuitStr() {
+						return EnumQuit
+					}
 				}
 				return EnumToggleCommandBar
 			}

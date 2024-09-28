@@ -6,9 +6,12 @@ import (
 	"github.com/Asiandayboy/CLITextEditor/util/ansi"
 )
 
-const CMDBAR_SAVE string = "save"
-const CMDBAR_SAVE_AS string = "save as"
-const CMDBAR_QUIT string = "quit"
+const (
+	CMDBAR_SAVE            string = "save"
+	CMDBAR_SAVE_AS         string = "save as"
+	CMDBAR_QUIT            string = "quit"
+	CMDBAR_TOGGLE_SOFTWRAP string = "sw"
+)
 
 const cmdBarWidth int = 35
 const cmdBarHeight int = 3
@@ -56,6 +59,8 @@ func executeCommandBarStr(f *FileEditor, cmdString string) {
 		f.SaveFile()
 	case CMDBAR_SAVE_AS:
 		// not implemented yet
+	case CMDBAR_TOGGLE_SOFTWRAP:
+		f.inputChan <- f.ToggleSoftWrap(!f.SoftWrap)
 	default:
 	}
 }

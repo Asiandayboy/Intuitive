@@ -145,7 +145,7 @@ func CalcNewACXY(
 	the viewport offset using the visual buffer and the visual buffer mapped.
 */
 func (f *FileEditor) UpdateBufferIndicies() {
-	if f.SoftWrap {
+	if f.SoftWrapEnabled {
 		f.bufferLine = CalcBufferLineFromACY(f.apparentCursorY, f.VisualBufferMapped, f.ViewportOffsetY)
 		f.bufferIndex = CalcBufferIndexFromACXY(
 			f.apparentCursorX-EditorLeftMargin+1, f.apparentCursorY,
@@ -191,4 +191,29 @@ func (f *FileEditor) IncrementCursorY() {
 
 func (f *FileEditor) DecrementCursorY() {
 	f.apparentCursorY = math.Clamp(f.apparentCursorY-1, 1, f.GetViewportHeight())
+}
+
+/*
+This function calculates the new cursor position for when soft wrap
+is enabled. It is called every time a window resize occurs or whenever
+soft wrap is toggled to true
+*/
+func (f *FileEditor) CalculateNewCursorPos() {
+	newACX, newACY := CalcNewACXY(
+		f.VisualBufferMapped, f.bufferLine,
+		f.bufferIndex, f.GetViewportWidth(), f.ViewportOffsetY,
+	)
+
+	indexCheck := CalcBufferIndexFromACXY(
+		newACX, newACY,
+		f.bufferLine, f.VisualBuffer, f.VisualBufferMapped,
+		f.ViewportOffsetY,
+	)
+
+	if indexCheck != f.bufferIndex {
+		newACX = f.GetViewportWidth()
+	}
+
+	f.apparentCursorX = newACX + EditorLeftMargin - 1
+	f.apparentCursorY = newACY
 }

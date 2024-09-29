@@ -2,6 +2,7 @@ package fileeditor
 
 import (
 	"fmt"
+
 	"github.com/Asiandayboy/CLITextEditor/render"
 	"github.com/Asiandayboy/CLITextEditor/util/ansi"
 )
@@ -60,7 +61,7 @@ func executeCommandBarStr(f *FileEditor, cmdString string) {
 	case CMDBAR_SAVE_AS:
 		// not implemented yet
 	case CMDBAR_TOGGLE_SOFTWRAP:
-		f.inputChan <- f.ToggleSoftWrap(!f.SoftWrap)
+		f.inputChan <- f.ToggleSoftWrap(!f.SoftWrapEnabled)
 	default:
 	}
 }

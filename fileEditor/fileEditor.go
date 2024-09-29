@@ -103,7 +103,7 @@ type FileEditor struct {
 	CommandBarToggled  bool
 
 	// Configs
-	SoftWrap        bool
+	SoftWrapEnabled bool
 	PrintEmptyLines bool  // print tildes for empty lines
 	TabIndentType   uint8 // determines how tabs are stored in the FileBuffer (either as ASCII 9 or ASCII 32)
 	TabSize         uint8
@@ -133,7 +133,7 @@ func NewFileEditor(filename string) FileEditor {
 		CommandBarToggled:  false,
 		QuitProgramFlag:    false,
 
-		SoftWrap:        true,
+		SoftWrapEnabled: true,
 		PrintEmptyLines: false,
 		TabIndentType:   IndentWithTab,
 		TabSize:         4,
@@ -154,7 +154,7 @@ func (f *FileEditor) ReadFileToBuffer() error {
 	}
 
 	// initalize visual buffers to determine initial cursor position
-	if f.SoftWrap {
+	if f.SoftWrapEnabled {
 		f.RefreshSoftWrapVisualBuffers()
 	} else {
 		f.RefreshNoWrapVisualBuffers()
@@ -232,9 +232,9 @@ func (f *FileEditor) Render(flag byte) {
 	ansi.HideCursor()
 
 	// visual buffers are already refreshed when a new line is inserted at the end of a line
-	if f.SoftWrap && flag != EnumNewLineInsertedAtLineEnd {
+	if f.SoftWrapEnabled && flag != EnumNewLineInsertedAtLineEnd {
 		f.RefreshSoftWrapVisualBuffers()
-	} else if !f.SoftWrap && flag != EnumNewLineInsertedAtLineEnd {
+	} else if !f.SoftWrapEnabled && flag != EnumNewLineInsertedAtLineEnd {
 		f.RefreshNoWrapVisualBuffers()
 	}
 
@@ -255,24 +255,8 @@ func (f *FileEditor) Render(flag byte) {
 
 	switch flag {
 	case EnumWindowResize, EnumSoftWrapEnabled:
-		if f.SoftWrap {
-			newACX, newACY := CalcNewACXY(
-				f.VisualBufferMapped, f.bufferLine,
-				f.bufferIndex, f.GetViewportWidth(), f.ViewportOffsetY,
-			)
-
-			indexCheck := CalcBufferIndexFromACXY(
-				newACX, newACY,
-				f.bufferLine, f.VisualBuffer, f.VisualBufferMapped,
-				f.ViewportOffsetY,
-			)
-
-			if indexCheck != f.bufferIndex {
-				newACX = f.GetViewportWidth()
-			}
-
-			f.apparentCursorX = newACX + EditorLeftMargin - 1
-			f.apparentCursorY = newACY
+		if f.SoftWrapEnabled {
+			f.CalculateNewCursorPos()
 		}
 	case EnumToggleCommandBar:
 		f.ToggleCommandBar(!f.CommandBarToggled)

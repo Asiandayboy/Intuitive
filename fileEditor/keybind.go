@@ -41,10 +41,10 @@ const (
 	ForwardSlash byte = 47
 	Backspace    byte = 127
 
-	UpArrowKey    byte = 'A'
-	DownArrowKey  byte = 'B'
-	RightArrowKey byte = 'C'
-	LeftArrowKey  byte = 'D'
+	UpArrowKey    byte = 'A' // ASCII decimal -> 65
+	DownArrowKey  byte = 'B' // ASCII decimal -> 66
+	RightArrowKey byte = 'C' // ASCII decimal -> 67
+	LeftArrowKey  byte = 'D' // ASCII decimal -> 68
 )
 
 // Represents the user's keybindings for each action
